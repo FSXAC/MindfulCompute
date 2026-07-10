@@ -7,7 +7,10 @@ import SwiftUI
 @MainActor
 final class OverlayModel: ObservableObject {
     @Published var dimmed = false
+    /// Whether the title card is mounted; its visibility is driven by
+    /// `cardOpacity` so fades are explicit rather than transition-dependent.
     @Published var titleCard = false
+    @Published var cardOpacity: Double = 0
     /// Panel frame in global screen coordinates; the dim leaves this region
     /// undimmed so the panel's glass samples bright content.
     @Published var cutout: CGRect?
@@ -86,10 +89,13 @@ final class OverlayController {
     private func showDim() {
         sequenceTask?.cancel()
         if model.titleCard {
-            withAnimation(.easeInOut(duration: 1.0)) {
-                model.titleCard = false
-            }
+            model.cardOpacity = 0
             mainWindow?.ignoresMouseEvents = true
+            sequenceTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(1.1))
+                guard !Task.isCancelled else { return }
+                self?.model.titleCard = false
+            }
         }
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
@@ -106,14 +112,18 @@ final class OverlayController {
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
         model.dimmed = true
-        withAnimation(.easeInOut(duration: 1.2)) {
-            model.titleCard = true
-        }
+        model.titleCard = true
+        model.cardOpacity = 0
         mainWindow?.ignoresMouseEvents = false
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let cardSeconds: Double = reduceMotion ? 5 : 10.5
         sequenceTask = Task { [weak self] in
+            // Let the mount at opacity 0 commit first, so the rise to 1
+            // animates instead of coalescing into a single frame.
+            try? await Task.sleep(for: .seconds(0.1))
+            guard !Task.isCancelled else { return }
+            self?.model.cardOpacity = 1
             try? await Task.sleep(for: .seconds(cardSeconds))
             guard !Task.isCancelled else { return }
             self?.endTitleCard()
@@ -123,13 +133,12 @@ final class OverlayController {
     private func endTitleCard() {
         sequenceTask?.cancel()
         guard manager.phase == .running else { return }
-        withAnimation(.easeInOut(duration: 1.0)) {
-            model.titleCard = false
-        }
+        model.cardOpacity = 0
         mainWindow?.ignoresMouseEvents = true
         sequenceTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.0))   // card fades out
+            try? await Task.sleep(for: .seconds(1.1))   // card fades out
             guard let self, !Task.isCancelled, self.manager.phase == .running else { return }
+            self.model.titleCard = false                // unmount, already invisible
             self.model.dimmed = false
             try? await Task.sleep(for: .seconds(2.2))   // dim fades out
             guard !Task.isCancelled, self.manager.phase == .running else { return }
@@ -208,8 +217,12 @@ struct OverlayView: View {
                 .animation(.easeInOut(duration: model.titleCard ? 1.2 : 2.0), value: dimOpacity)
             if isMain, model.titleCard {
                 TitleCardView(intention: model.intention, minutes: model.minutes)
+                    .opacity(model.cardOpacity)
+                    .animation(
+                        .easeInOut(duration: model.cardOpacity > 0 ? 1.2 : 1.0),
+                        value: model.cardOpacity
+                    )
                     .onTapGesture { model.onSkip?() }
-                    .transition(.opacity)
             }
         }
         .ignoresSafeArea()

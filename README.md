@@ -33,13 +33,15 @@ See [USER.md](USER.md) for user notes and a manual test checklist.
 Requires Xcode (macOS 26 SDK) and [xcodegen](https://github.com/yonaskolb/XcodeGen):
 
 ```sh
-xcodegen generate
-xcodebuild -project MindfulCompute.xcodeproj -scheme MindfulCompute \
-  -configuration Release -derivedDataPath build build
+./build.sh            # build only
+./build.sh --install  # build, replace /Applications copy, relaunch
 ```
 
-The app lands in `build/Build/Products/Release/MindfulCompute.app`.
-Copy it to `/Applications` so the "Start at login" toggle registers a
+The script stamps a timestamped build number (e.g. `1.1 (260710.1645)`)
+shown in the menu-bar menu and on the start panel, so a stale build is
+easy to spot. The app lands in
+`build/Build/Products/Release/MindfulCompute.app`; keep the installed
+copy in `/Applications` so the "Start at login" toggle registers a
 stable path.
 
 ## Testing the flow quickly

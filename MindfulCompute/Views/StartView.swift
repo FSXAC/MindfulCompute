@@ -73,8 +73,14 @@ struct StartView: View {
             .tint(.sage)
             .keyboardShortcut(.defaultAction)
             .disabled(manager.trimmedIntention.isEmpty)
+
+            Text("v\(AppVersion.display)")
+                .font(.caption2)
+                .foregroundStyle(.quaternary)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(28)
+        .padding(.bottom, -12)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 intentionFocused = true

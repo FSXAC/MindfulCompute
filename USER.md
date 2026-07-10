@@ -5,14 +5,12 @@
 - **Menu-bar managers hide the timer.** If you use Ice, Bartender, or a
   similar tool, the MindfulCompute item (a leaf when idle, a countdown
   while a session runs) starts out in the hidden section. Unhide it once.
-- **Install to /Applications.** The build lands in
-  `build/Build/Products/Release/MindfulCompute.app`. Copy it to
-  `/Applications` before enabling "Start at login", so the login item
-  points at a stable path:
-
-  ```sh
-  cp -R build/Build/Products/Release/MindfulCompute.app /Applications/
-  ```
+- **Build with `./build.sh --install`.** It builds, replaces the copy in
+  `/Applications` (a stable path for "Start at login"), and relaunches.
+- **Check the version to rule out stale builds.** The menu-bar menu and
+  the bottom of the start panel show e.g. `1.1 (260710.1645)` — the
+  build number is the build's date and time (`yymmdd.HHMM`). If odd
+  behavior survives a rebuild, compare this stamp first.
 
 - **"Start at login" matters.** The app can only greet you at unlock if
   it is already running. Enable the toggle in the menu-bar menu.
@@ -62,23 +60,23 @@ session lasts 5 seconds). Each line should hold true:
       the "For N minutes" label follows it.
 - [x] Pressing Return in the intention field starts the session, same as
       clicking **Begin**.
-- [ ] The rest of the screen (Dock included) sits behind a dark dimmer
+- [x] The rest of the screen (Dock included) sits behind a dark dimmer
       while the panel is up; the menu bar stays bright. Clicks still
       reach windows beneath the dim.
-- [ ] The panel itself is excluded from the dim — it reads noticeably
+- [x] The panel itself is excluded from the dim — it reads noticeably
       brighter than everything behind it.
 - [ ] Drag the panel around: the bright cutout follows it without lag
       or leaving dim edges over the panel.
 
 ### Session start (title card)
-- [ ] On **Begin**, the bowl plays and the screen darkens further; your
+- [x] On **Begin**, the bowl plays and the screen darkens further; your
       intention appears full-screen between two thin rules, with
       "THE NEXT N MINUTES" above it.
-- [ ] A breathing ring at the bottom swells ("Breathe in") and settles
+- [x] A breathing ring at the bottom swells ("Breathe in") and settles
       ("Breathe out") on a slow 4-second cadence.
-- [ ] After about ten seconds the card fades out, then the dimmer fades
+- [x] After about ten seconds the card fades out, then the dimmer fades
       away, leaving the desktop untouched.
-- [ ] Clicking anywhere on the title card skips it (card fades, then dim).
+- [x] Clicking anywhere on the title card skips it (card fades, then dim).
 - [ ] With Reduce Motion on, the card is shorter and the ring holds still.
 
 ### During a session
@@ -87,14 +85,14 @@ session lasts 5 seconds). Each line should hold true:
       bar where the leaf icon was.
 - [x] The menu shows your intention, the time remaining, and an
       "End session early" item.
-- [ ] "End session early" jumps straight to the break panel (bowl included).
+- [x] "End session early" jumps straight to the break panel (bowl included).
 - [x] Lock the screen mid-session, unlock: no panel appears, the
       countdown kept running.
 
 ### Session end
-- [ ] The bowl plays (same sound as the start — the gong is retired) and
+- [x] The bowl plays (same sound as the start — the gong is retired) and
       the break panel appears on its own — even over a fullscreen app.
-- [ ] The dimmer fades back in with the break panel and stays through
+- [x] The dimmer fades back in with the break panel and stays through
       **Continue** and the next start panel, until a session begins.
 - [x] The panel shows a quote and "You set out to: …" with your intention.
 - [x] The breathing dot pulses slowly (and holds still if System

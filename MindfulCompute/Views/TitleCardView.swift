@@ -49,21 +49,28 @@ struct BreathGuide: View {
     @State private var label = "Breathe in"
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 24) {
             ZStack {
+                // Soft halo so the movement reads from across the room.
                 Circle()
-                    .strokeBorder(.white.opacity(0.6), lineWidth: 1.5)
-                    .frame(width: 52, height: 52)
-                    .scaleEffect(inhaling ? 1.35 : 0.72)
+                    .fill(.white.opacity(0.22))
+                    .frame(width: 72, height: 72)
+                    .scaleEffect(inhaling ? 1.55 : 0.65)
+                    .blur(radius: 14)
                 Circle()
-                    .fill(.white.opacity(0.85))
-                    .frame(width: 8, height: 8)
+                    .strokeBorder(.white.opacity(0.9), lineWidth: 2.5)
+                    .frame(width: 72, height: 72)
+                    .scaleEffect(inhaling ? 1.4 : 0.6)
+                Circle()
+                    .fill(.white.opacity(0.9))
+                    .frame(width: 10, height: 10)
+                    .scaleEffect(inhaling ? 1.25 : 0.75)
             }
-            .frame(width: 80, height: 80)
+            .frame(width: 130, height: 130)
             Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .tracking(2)
-                .foregroundStyle(.white.opacity(0.6))
+                .font(.system(size: 15, weight: .medium))
+                .tracking(2.5)
+                .foregroundStyle(.white.opacity(0.85))
         }
         .task {
             guard !reduceMotion else {
