@@ -65,6 +65,10 @@ session lasts 5 seconds). Each line should hold true:
 - [ ] The rest of the screen (Dock included) sits behind a dark dimmer
       while the panel is up; the menu bar stays bright. Clicks still
       reach windows beneath the dim.
+- [ ] The panel itself is excluded from the dim — it reads noticeably
+      brighter than everything behind it.
+- [ ] Drag the panel around: the bright cutout follows it without lag
+      or leaving dim edges over the panel.
 
 ### Session start (title card)
 - [ ] On **Begin**, the bowl plays and the screen darkens further; your
