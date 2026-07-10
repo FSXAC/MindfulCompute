@@ -96,6 +96,8 @@ final class SessionManager: ObservableObject {
         remaining = 0
         quote = Quotes.random()
         phase = .resting
-        SoundPlayer.shared.play(.gong)
+        // The bowl bookends the session — the gong reads as tonally foreign
+        // next to it, so both ends use the bowl.
+        SoundPlayer.shared.play(.bowl)
     }
 }

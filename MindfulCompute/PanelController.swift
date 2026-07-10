@@ -23,7 +23,8 @@ final class PanelController {
             backing: .buffered,
             defer: false
         )
-        panel.level = .floating
+        // Above the dimmer overlay windows, which sit just above the Dock.
+        panel.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 2)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isMovableByWindowBackground = true
         panel.isFloatingPanel = true

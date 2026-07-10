@@ -29,8 +29,18 @@
 - **There is no close button on the panel — by design.** The panel stays
   until you commit to a session. It is draggable if it's in the way, and
   quitting the app from the menu always works.
+- **The dimmer is click-through.** The rest of the screen dims while the
+  intention or break panel is up, but clicks still reach the windows
+  beneath — it nudges, it doesn't lock you out. The menu bar stays
+  bright so the countdown is always readable.
+- **The title card can be skipped.** When a session begins, your
+  intention takes over the screen with a breathing guide for about ten
+  seconds. Click anywhere on it to skip ahead. With Reduce Motion on,
+  it shows briefly without the pulsing ring.
 - **Fast testing mode.** Launch with `MINDFUL_SECONDS=1` in the
-  environment and the slider counts seconds instead of minutes:
+  environment and the slider counts seconds instead of minutes. Add
+  `MINDFUL_AUTOSTART="some intention"` to begin a session immediately
+  on launch (with the default 25-minute duration):
 
   ```sh
   MINDFUL_SECONDS=1 /Applications/MindfulCompute.app/Contents/MacOS/MindfulCompute
@@ -42,41 +52,57 @@ Run these once after building (use `MINDFUL_SECONDS=1` so a "5 minute"
 session lasts 5 seconds). Each line should hold true:
 
 ### Start panel
-- [ ] Launching the app shows the intention panel, floating above all
+- [x] Launching the app shows the intention panel, floating above all
       other windows.
-- [ ] The panel can be dragged by its background to a new position.
-- [ ] The panel stays on top when you click other apps.
-- [ ] **Begin** is disabled while the intention field is empty (or only
+- [x] The panel can be dragged by its background to a new position.
+- [x] The panel stays on top when you click other apps.
+- [x] **Begin** is disabled while the intention field is empty (or only
       spaces), and enables once you type something.
-- [ ] The slider moves in 5-minute steps between 5 min and 1 hour, and
+- [x] The slider moves in 5-minute steps between 5 min and 1 hour, and
       the "For N minutes" label follows it.
-- [ ] Pressing Return in the intention field starts the session, same as
+- [x] Pressing Return in the intention field starts the session, same as
       clicking **Begin**.
+- [ ] The rest of the screen (Dock included) sits behind a dark dimmer
+      while the panel is up; the menu bar stays bright. Clicks still
+      reach windows beneath the dim.
+
+### Session start (title card)
+- [ ] On **Begin**, the bowl plays and the screen darkens further; your
+      intention appears full-screen between two thin rules, with
+      "THE NEXT N MINUTES" above it.
+- [ ] A breathing ring at the bottom swells ("Breathe in") and settles
+      ("Breathe out") on a slow 4-second cadence.
+- [ ] After about ten seconds the card fades out, then the dimmer fades
+      away, leaving the desktop untouched.
+- [ ] Clicking anywhere on the title card skips it (card fades, then dim).
+- [ ] With Reduce Motion on, the card is shorter and the ring holds still.
 
 ### During a session
-- [ ] The Tibetan bowl sound plays at start.
-- [ ] The panel disappears; a countdown (e.g. `4:59`) ticks in the menu
+- [x] The Tibetan bowl sound plays at start.
+- [x] The panel disappears; a countdown (e.g. `4:59`) ticks in the menu
       bar where the leaf icon was.
-- [ ] The menu shows your intention, the time remaining, and an
+- [x] The menu shows your intention, the time remaining, and an
       "End session early" item.
-- [ ] "End session early" jumps straight to the break panel (gong included).
-- [ ] Lock the screen mid-session, unlock: no panel appears, the
+- [ ] "End session early" jumps straight to the break panel (bowl included).
+- [x] Lock the screen mid-session, unlock: no panel appears, the
       countdown kept running.
 
 ### Session end
-- [ ] The gong plays and the break panel appears on its own — even over a
-      fullscreen app.
-- [ ] The panel shows a quote and "You set out to: …" with your intention.
-- [ ] The breathing dot pulses slowly (and holds still if System
+- [ ] The bowl plays (same sound as the start — the gong is retired) and
+      the break panel appears on its own — even over a fullscreen app.
+- [ ] The dimmer fades back in with the break panel and stays through
+      **Continue** and the next start panel, until a session begins.
+- [x] The panel shows a quote and "You set out to: …" with your intention.
+- [x] The breathing dot pulses slowly (and holds still if System
       Settings → Accessibility → Motion → Reduce motion is on).
-- [ ] After **Continue**, the start panel returns, with intention and
+- [x] After **Continue**, the start panel returns, with intention and
       reflection cleared.
 
 ### Data
-- [ ] `journal.md` gained an entry with the date, duration, intention,
+- [x] `journal.md` gained an entry with the date, duration, intention,
       and reflection ("Open journal" in the menu shows it).
-- [ ] `sessions.json` gained the same session as a JSON object.
-- [ ] Ending early records the actual minutes with "(planned N)" noted in
+- [x] `sessions.json` gained the same session as a JSON object.
+- [x] Ending early records the actual minutes with "(planned N)" noted in
       the journal.
 
 ### Unlock behavior

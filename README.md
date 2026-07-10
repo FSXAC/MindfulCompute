@@ -11,7 +11,12 @@ that's saved to a journal.
 
 - The intention panel appears at launch and every time the Mac unlocks
   (unless a session is already running). It floats above all windows and
-  can be dragged anywhere.
+  can be dragged anywhere. While it waits, the rest of the screen sits
+  behind a gentle dimmer that only lifts once a session begins.
+- Starting a session plays a Tibetan bowl and shows your intention as a
+  full-screen chapter-style title card with a slow breathing guide,
+  before the dimmer fades and the desktop returns. The same bowl marks
+  the end of the session.
 - While a session runs, everything disappears except a countdown in the
   menu bar. The countdown is anchored to wall-clock time, so locking the
   screen or sleeping doesn't pause it.

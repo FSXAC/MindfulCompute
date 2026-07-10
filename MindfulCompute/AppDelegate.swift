@@ -3,11 +3,20 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panelController: PanelController?
+    private var overlayController: OverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        overlayController = OverlayController(manager: .shared)
         let controller = PanelController(manager: .shared)
         panelController = controller
         controller.show()
+
+        // Test hook: MINDFUL_AUTOSTART="some intention" begins a session on
+        // launch with the default duration (pair with MINDFUL_SECONDS=1).
+        if let auto = ProcessInfo.processInfo.environment["MINDFUL_AUTOSTART"] {
+            SessionManager.shared.intention = auto
+            SessionManager.shared.begin()
+        }
 
         // Surface the intention panel every time the Mac unlocks, unless a
         // session is already underway.
