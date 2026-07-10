@@ -45,41 +45,70 @@ final class OverlayController {
             }
             .store(in: &cancellables)
 
-        // Track the panel as it is dragged or resized so the hole in the
-        // dim follows it.
-        for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
-            NotificationCenter.default.addObserver(
-                forName: name, object: panel, queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in self?.updateCutout() }
+    }
+
+    /// Window drags are handled by the window server, so move notifications
+    /// trail the actual frame. Polling each frame keeps the hole glued to
+    /// the panel; the timer only runs while the dim is visible.
+    private var pollTimer: Timer?
+    private var lastPanelFrame = CGRect.zero
+
+    private func startTrackingPanel() {
+        guard pollTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            // Timer is scheduled on the main run loop.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if self.panel.frame != self.lastPanelFrame {
+                    self.updateCutout()
+                }
             }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        pollTimer = timer
+    }
+
+    private func stopTrackingPanel() {
+        pollTimer?.invalidate()
+        pollTimer = nil
     }
 
     private func updateCutout() {
-        model.cutout = manager.phase == .running ? nil : panel.frame
+        let frame = manager.phase == .running ? nil : panel.frame
+        lastPanelFrame = frame ?? .zero
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            model.cutout = frame
+        }
     }
 
     private func showDim() {
         sequenceTask?.cancel()
         if model.titleCard {
-            model.titleCard = false
+            withAnimation(.easeInOut(duration: 1.0)) {
+                model.titleCard = false
+            }
             mainWindow?.ignoresMouseEvents = true
         }
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
         updateCutout()
+        startTrackingPanel()
         model.dimmed = true
     }
 
     private func runTitleSequence() {
+        stopTrackingPanel()
         model.intention = manager.trimmedIntention
         model.minutes = Int(manager.minutes)
         model.cutout = nil
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
         model.dimmed = true
-        model.titleCard = true
+        withAnimation(.easeInOut(duration: 1.2)) {
+            model.titleCard = true
+        }
         mainWindow?.ignoresMouseEvents = false
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -94,7 +123,9 @@ final class OverlayController {
     private func endTitleCard() {
         sequenceTask?.cancel()
         guard manager.phase == .running else { return }
-        model.titleCard = false
+        withAnimation(.easeInOut(duration: 1.0)) {
+            model.titleCard = false
+        }
         mainWindow?.ignoresMouseEvents = true
         sequenceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.0))   // card fades out
@@ -178,9 +209,9 @@ struct OverlayView: View {
             if isMain, model.titleCard {
                 TitleCardView(intention: model.intention, minutes: model.minutes)
                     .onTapGesture { model.onSkip?() }
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 1.2), value: model.titleCard)
         .ignoresSafeArea()
     }
 }
