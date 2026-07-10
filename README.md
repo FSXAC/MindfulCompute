@@ -18,7 +18,10 @@ that's saved to a journal.
 - The menu bar item offers "End session early", a "Start at login"
   toggle, and a shortcut to the journal.
 - Intentions and reflections are appended to
-  `~/Library/Application Support/MindfulCompute/journal.md`.
+  `~/Library/Application Support/MindfulCompute/journal.md` (readable)
+  and `sessions.json` (structured, for revisiting the data later).
+
+See [USER.md](USER.md) for user notes and a manual test checklist.
 
 ## Building
 
