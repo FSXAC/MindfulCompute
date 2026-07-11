@@ -3,8 +3,9 @@ import Combine
 import SwiftUI
 
 /// Shared state for the title-card overlay shown at session start.
-/// (Ambient dimming while the panel waits is handled by the panel's own
-/// child window — see PanelController — so it can never lag a drag.)
+/// (All screen dimming — while the panel waits AND behind the title card —
+/// is the panel's dim sheet; see PanelController. This overlay draws only
+/// the card itself, so the two never hand off with a bright gap.)
 @MainActor
 final class OverlayModel: ObservableObject {
     /// Whether the title card is mounted; its visibility is driven by
@@ -16,16 +17,19 @@ final class OverlayModel: ObservableObject {
     var onSkip: (() -> Void)?
 }
 
-/// One full-screen window per display, used only for the deep dim behind
-/// the session-start title card.
+/// One full-screen window (on the panel's screen) that renders the
+/// session-start title card above the dim sheet.
 @MainActor
 final class OverlayController {
     private let manager: SessionManager
     private let model = OverlayModel()
-    private var windows: [NSWindow] = []
-    private var mainWindow: NSWindow?
+    private var window: NSWindow?
     private var sequenceTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+
+    /// Called when the title card has faded and the session dim should
+    /// fade away too. Wired to PanelController.releaseSessionDim().
+    var onSessionDimRelease: (() -> Void)?
 
     init(manager: SessionManager) {
         self.manager = manager
@@ -46,11 +50,11 @@ final class OverlayController {
     private func runTitleSequence() {
         model.intention = manager.trimmedIntention
         model.minutes = Int(manager.minutes)
-        ensureWindows()
-        for window in windows { window.orderFrontRegardless() }
+        let window = ensureWindow()
+        window.orderFrontRegardless()
         model.titleCard = true
         model.cardOpacity = 0
-        mainWindow?.ignoresMouseEvents = false
+        window.ignoresMouseEvents = false
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let cardSeconds: Double = reduceMotion ? 5 : 12
@@ -70,86 +74,67 @@ final class OverlayController {
         sequenceTask?.cancel()
         guard manager.phase == .running else { return }
         model.cardOpacity = 0
-        mainWindow?.ignoresMouseEvents = true
+        window?.ignoresMouseEvents = true
         sequenceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.1))   // card fades out
             guard let self, !Task.isCancelled, self.manager.phase == .running else { return }
-            self.model.titleCard = false                // dim fades out
-            try? await Task.sleep(for: .seconds(2.2))
-            guard !Task.isCancelled, self.manager.phase == .running else { return }
-            for window in self.windows { window.orderOut(nil) }
+            self.model.titleCard = false
+            self.onSessionDimRelease?()                 // dim fades out
+            self.window?.orderOut(nil)
         }
     }
 
     /// A session stopped while the title card was up (e.g. ended early):
-    /// fade everything out and hand the dimming back to the panel.
+    /// fade the card out; the panel reclaims the dim on its own.
     private func dismissTitleOverlay() {
         sequenceTask?.cancel()
         guard model.titleCard else { return }
         model.cardOpacity = 0
         model.titleCard = false
-        mainWindow?.ignoresMouseEvents = true
+        window?.ignoresMouseEvents = true
         sequenceTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2.2))
+            try? await Task.sleep(for: .seconds(1.1))
             guard let self, !Task.isCancelled else { return }
-            for window in self.windows { window.orderOut(nil) }
+            self.window?.orderOut(nil)
         }
     }
 
-    private func ensureWindows() {
-        let screens = NSScreen.screens
-        guard windows.count != screens.count else {
-            for (window, screen) in zip(windows, screens) {
-                window.setFrame(screen.frame, display: true)
-            }
-            return
-        }
-
-        for window in windows { window.orderOut(nil) }
-        windows = []
-        mainWindow = nil
-
-        for (index, screen) in screens.enumerated() {
-            let isMain = index == 0
-            let window = NSWindow(
-                contentRect: screen.frame,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false
-            )
-            // Above the Dock so the whole desktop dims, but below the menu
-            // bar so the countdown stays visible.
-            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 1)
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.hasShadow = false
-            window.ignoresMouseEvents = true
-            window.isReleasedWhenClosed = false
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.contentView = NSHostingView(
-                rootView: OverlayView(model: model, isMain: isMain)
-            )
+    private func ensureWindow() -> NSWindow {
+        // Follow the key window's screen, i.e. wherever the panel lives.
+        let screen = NSScreen.main ?? NSScreen.screens[0]
+        if let window {
             window.setFrame(screen.frame, display: true)
-            windows.append(window)
-            if isMain { mainWindow = window }
+            return window
         }
+
+        let window = NSWindow(
+            contentRect: screen.frame,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        // Above the dim sheet (dock+2), below the menu bar, so the card
+        // text sits on the dim while the countdown stays visible.
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.dockWindow)) + 3)
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = false
+        window.ignoresMouseEvents = true
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.contentView = NSHostingView(rootView: OverlayView(model: model))
+        window.setFrame(screen.frame, display: true)
+        self.window = window
+        return window
     }
 }
 
 struct OverlayView: View {
     @ObservedObject var model: OverlayModel
-    let isMain: Bool
 
     var body: some View {
         ZStack {
-            // Reads lighter on screen than the number suggests — it
-            // composites against already-bright content — so set by eye.
-            Color.black.opacity(model.titleCard ? 0.82 : 0)
-                .animation(
-                    .easeInOut(duration: model.titleCard ? 1.2 : 2.0),
-                    value: model.titleCard
-                )
-            if isMain, model.titleCard {
+            if model.titleCard {
                 TitleCardView(intention: model.intention, minutes: model.minutes)
                     .opacity(model.cardOpacity)
                     .animation(
@@ -159,6 +144,7 @@ struct OverlayView: View {
                     .onTapGesture { model.onSkip?() }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
     }
 }

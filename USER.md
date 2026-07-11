@@ -63,16 +63,16 @@ session lasts 5 seconds). Each line should hold true:
       the "For N minutes" label follows it.
 - [x] Pressing Return in the intention field starts the session, same as
       clicking **Begin**.
-- [ ] The rest of the screen (Dock included) sits behind a dark dimmer
+- [x] The rest of the screen (Dock included) sits behind a dark dimmer
       while the panel is up; the menu bar stays bright.
-- [ ] Clicking anywhere on the dimmed area does nothing to the app
+- [x] Clicking anywhere on the dimmed area does nothing to the app
       beneath — instead the panel pulses briefly and takes keyboard
       focus.
-- [ ] The menu bar still works while the dim is up, and Cmd+Tab still
+- [x] The menu bar still works while the dim is up, and Cmd+Tab still
       switches apps.
-- [ ] The panel is glass again — it samples the bright desktop behind
+- [x] The panel is glass again — it samples the bright desktop behind
       it, not the dim, and reads clearly brighter than its surroundings.
-- [ ] Drag the panel around as fast as you like: the bright region is
+- [x] Drag the panel around as fast as you like: the bright region is
       glued to it with zero lag (it moves in the same window-server
       transaction as the panel).
 
@@ -80,9 +80,13 @@ session lasts 5 seconds). Each line should hold true:
 - [x] On **Begin**, the bowl plays and the screen darkens further; your
       intention appears full-screen between two thin rules, with
       "THE NEXT N MINUTES" above it.
-- [ ] The breathing ring walks a single box-breathing cycle: 4s swell
+- [ ] Between **Begin** and the title card the screen only ever gets
+      darker: the panel dissolves into the deepening dim in one motion —
+      no flash back to full brightness (the dim is a single sheet now,
+      handed from panel to card).
+- [x] The breathing ring walks a single box-breathing cycle: 4s swell
       ("Breathe in"), 4s steady ("Hold"), 4s settle ("Breathe out").
-- [ ] After about twelve seconds the card fades out, then the dimmer
+- [x] After about twelve seconds the card fades out, then the dimmer
       fades away, leaving the desktop untouched.
 - [x] Clicking anywhere on the title card skips it (card fades, then dim).
 - [ ] With Reduce Motion on, the card is shorter and the ring holds still.
@@ -103,6 +107,12 @@ session lasts 5 seconds). Each line should hold true:
 - [x] The dimmer fades back in with the break panel and stays through
       **Continue** and the next start panel, until a session begins.
 - [x] The panel shows a quote and "You set out to: …" with your intention.
+- [ ] The break panel appears already showing the reflection page — never
+      a split-second flash of the start page first (the page switches
+      while the panel is hidden mid-session).
+- [ ] After **Continue**, the crossfade back to the start page is clean:
+      no flashing or misaligned edges around the panel while it changes
+      height (the dim's hole now tracks resizes without rebuilding).
 - [x] The breathing dot pulses slowly (and holds still if System
       Settings → Accessibility → Motion → Reduce motion is on).
 - [x] After **Continue**, the start panel returns, with intention and

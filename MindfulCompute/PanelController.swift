@@ -5,6 +5,9 @@ import SwiftUI
 extension Notification.Name {
     /// Posted when the user clicks the dimmed area; the panel pulses.
     static let panelNudge = Notification.Name("MCPanelNudge")
+    /// Posted once the panel has fully faded out at session start, so the
+    /// (hidden) panel content can switch to the break page ahead of time.
+    static let panelDidHide = Notification.Name("MCPanelDidHide")
 }
 
 /// Borderless always-on-top panel that can still take keyboard input.
@@ -18,12 +21,18 @@ final class PanelController {
     private let manager: SessionManager
     private var cancellables = Set<AnyCancellable>()
     private var hasPositioned = false
+    private var transitionTask: Task<Void, Never>?
 
     /// The dim sheet is a child window of the panel: the window server moves
     /// parent and child atomically during drags, so the panel-shaped hole in
     /// the sheet can never lag. The sheet is oversized far past the screens
     /// so its own movement is invisible (uniform black everywhere else), and
     /// it is built from solid-color layers, which cost no backing memory.
+    ///
+    /// It is also the app's ONE dimmer: when a session begins it deepens,
+    /// its hole closes over the fading panel, and it is detached to outlive
+    /// the panel as the title card's backdrop — so the screen never blinks
+    /// back to full brightness between the panel and the card.
     private let dimSheet: NSWindow
     private let dimContent: DimSheetView
     /// Keeps the sheet under the compositor's 16384-pixel surface limit on
@@ -91,7 +100,7 @@ final class PanelController {
             .receive(on: RunLoop.main)
             .sink { [weak self] phase in
                 switch phase {
-                case .running: self?.hide()
+                case .running: self?.beginSessionTransition()
                 case .idle, .resting: self?.show()
                 }
             }
@@ -104,6 +113,8 @@ final class PanelController {
     }
 
     func show() {
+        transitionTask?.cancel()
+        transitionTask = nil
         if !hasPositioned, let screen = NSScreen.main {
             let frame = panel.frame
             let visible = screen.visibleFrame
@@ -115,22 +126,79 @@ final class PanelController {
             hasPositioned = true
         }
         syncDimSheet()
+        dimSheet.ignoresMouseEvents = false
+
+        // If the sheet is on screen without a parent, it is still carrying
+        // the deep session dim (the session just ended, possibly while the
+        // title card or its fade-out was underway).
+        let sheetCarriesSessionDim = dimSheet.isVisible && dimSheet.parent == nil
         if dimSheet.parent == nil {
-            dimSheet.alphaValue = 0
+            if !sheetCarriesSessionDim { dimSheet.alphaValue = 0 }
             panel.addChildWindow(dimSheet, ordered: .below)
         }
-        panel.makeKeyAndOrderFront(nil)
-        panel.orderFrontRegardless()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 2.0
-            dimSheet.animator().alphaValue = 1
+
+        if sheetCarriesSessionDim {
+            // Hand the dim back: the panel fades in while the hole reopens
+            // and the dim eases from title-card depth to its resting level.
+            panel.alphaValue = 0
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0.7)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.7
+                panel.animator().alphaValue = 1
+                dimSheet.animator().alphaValue = 1   // may be mid release-fade
+            }
+        } else {
+            panel.alphaValue = 1
+            dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0)
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 2.0
+                dimSheet.animator().alphaValue = 1
+            }
         }
     }
 
-    private func hide() {
-        panel.removeChildWindow(dimSheet)
-        dimSheet.orderOut(nil)
-        panel.orderOut(nil)
+    /// Session started: the panel dissolves while the dim deepens and its
+    /// hole closes, then the sheet is detached to serve as the title card's
+    /// backdrop. The screen darkens monotonically — no bright gap.
+    private func beginSessionTransition() {
+        transitionTask?.cancel()
+        dimSheet.ignoresMouseEvents = true   // stop gating clicks once committed
+        syncDimSheet()
+        dimContent.setDim(level: DimSheetView.deepLevel, holeClosed: true, duration: 0.8)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.8
+            panel.animator().alphaValue = 0
+        }
+        transitionTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(0.85))
+            guard let self, !Task.isCancelled else { return }
+            // Detach so the sheet outlives the panel under the title card.
+            self.panel.removeChildWindow(self.dimSheet)
+            self.panel.orderOut(nil)
+            self.panel.alphaValue = 1
+            NotificationCenter.default.post(name: .panelDidHide, object: nil)
+        }
+    }
+
+    /// The title card has finished: fade the session dim away and release
+    /// the sheet. Called by the overlay controller; a no-op if the session
+    /// already ended (show() reclaimed the sheet).
+    func releaseSessionDim() {
+        guard manager.phase == .running, dimSheet.parent == nil else { return }
+        transitionTask?.cancel()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 2.0
+            dimSheet.animator().alphaValue = 0
+        }
+        transitionTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.1))
+            guard let self, !Task.isCancelled else { return }
+            self.dimSheet.orderOut(nil)
+        }
     }
 
     private func syncDimSheet() {
@@ -141,20 +209,35 @@ final class PanelController {
 
     /// A click landed on the dim: pulse the panel and give it key focus.
     private func nudge() {
+        guard manager.phase != .running else { return }
         panel.makeKeyAndOrderFront(nil)
         NotificationCenter.default.post(name: .panelNudge, object: nil)
     }
 }
 
 /// Solid-color layers forming a full dim with a rounded rectangular hole:
-/// four strips around the hole plus four small corner pieces that carve
-/// the panel's corner radius. Solid layers never rasterize, so the huge
-/// sheet stays cheap.
+/// four strips around the hole, four corner pieces that carve the panel's
+/// corner radius, and a hole cover that can fade in to close the hole
+/// entirely (session-start transition). All pieces are opaque black inside
+/// a container whose opacity is the dim level, so the level animates as a
+/// single value. Solid layers never rasterize, so the huge sheet stays
+/// cheap. Layers are reused across layout passes with implicit animations
+/// disabled — the hole tracks panel resizes frame-for-frame with no
+/// flashing edges.
 private final class DimSheetView: NSView {
     var onClick: (() -> Void)?
 
-    private static let dimAlpha: Float = 0.60
+    /// Dim while the panel waits for the user.
+    static let restLevel: Float = 0.60
+    /// Deeper dim behind the title card. (Reads lighter on screen than the
+    /// number suggests — it composites against bright content.)
+    static let deepLevel: Float = 0.82
     private static let cornerRadius: CGFloat = 26
+
+    private let container = CALayer()
+    private let strips = [CALayer(), CALayer(), CALayer(), CALayer()]
+    private let corners = [CAShapeLayer(), CAShapeLayer(), CAShapeLayer(), CAShapeLayer()]
+    private let holeCover = CAShapeLayer()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -162,6 +245,22 @@ private final class DimSheetView: NSView {
         // never repaints or clears the manually managed sublayers.
         layer = CALayer()
         wantsLayer = true
+
+        let black = NSColor.black.cgColor
+        for strip in strips {
+            strip.backgroundColor = black
+            container.addSublayer(strip)
+        }
+        for corner in corners {
+            corner.fillColor = black
+            corner.fillRule = .evenOdd
+            container.addSublayer(corner)
+        }
+        holeCover.fillColor = black
+        holeCover.opacity = 0
+        container.addSublayer(holeCover)
+        container.opacity = Self.restLevel
+        layer?.addSublayer(container)
     }
 
     @available(*, unavailable)
@@ -171,33 +270,40 @@ private final class DimSheetView: NSView {
         onClick?()
     }
 
-    func layoutHole(size holeSize: CGSize, margin: CGFloat) {
-        guard let layer else { return }
-        layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+    /// Animate the dim level and whether the hole is covered. Duration 0
+    /// applies instantly.
+    func setDim(level: Float, holeClosed: Bool, duration: TimeInterval) {
+        CATransaction.begin()
+        if duration <= 0 {
+            CATransaction.setDisableActions(true)
+        } else {
+            CATransaction.setAnimationDuration(duration)
+            CATransaction.setAnimationTimingFunction(CAMediaTimingFunction(name: .easeInEaseOut))
+        }
+        container.opacity = level
+        holeCover.opacity = holeClosed ? 1 : 0
+        CATransaction.commit()
+    }
 
-        let dim = NSColor.black.cgColor
+    func layoutHole(size holeSize: CGSize, margin: CGFloat) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+
         let radius = Self.cornerRadius
         let w = holeSize.width
         let h = holeSize.height
         let total = CGSize(width: w + margin * 2, height: h + margin * 2)
+        container.frame = CGRect(origin: .zero, size: total)
 
-        func strip(_ frame: CGRect) {
-            let sublayer = CALayer()
-            sublayer.backgroundColor = dim
-            sublayer.opacity = Self.dimAlpha
-            sublayer.frame = frame
-            layer.addSublayer(sublayer)
-        }
-
-        strip(CGRect(x: 0, y: 0, width: total.width, height: margin))              // below
-        strip(CGRect(x: 0, y: margin + h, width: total.width, height: margin))     // above
-        strip(CGRect(x: 0, y: margin, width: margin, height: h))                   // left
-        strip(CGRect(x: margin + w, y: margin, width: margin, height: h))          // right
+        strips[0].frame = CGRect(x: 0, y: 0, width: total.width, height: margin)          // below
+        strips[1].frame = CGRect(x: 0, y: margin + h, width: total.width, height: margin) // above
+        strips[2].frame = CGRect(x: 0, y: margin, width: margin, height: h)               // left
+        strips[3].frame = CGRect(x: margin + w, y: margin, width: margin, height: h)      // right
 
         // Corner pieces: a radius-sized square minus the quarter-disc the
         // panel's rounded corner occupies. arcCenter is in local coords.
-        func corner(at origin: CGPoint, arcCenter: CGPoint) {
-            let shape = CAShapeLayer()
+        func corner(_ shape: CAShapeLayer, at origin: CGPoint, arcCenter: CGPoint) {
             let path = CGMutablePath()
             path.addRect(CGRect(x: 0, y: 0, width: radius, height: radius))
             path.addEllipse(in: CGRect(
@@ -205,20 +311,23 @@ private final class DimSheetView: NSView {
                 width: radius * 2, height: radius * 2
             ))
             shape.path = path
-            shape.fillRule = .evenOdd
-            shape.fillColor = dim
-            shape.opacity = Self.dimAlpha
             shape.frame = CGRect(origin: origin, size: CGSize(width: radius, height: radius))
-            layer.addSublayer(shape)
         }
 
-        corner(at: CGPoint(x: margin, y: margin),
-               arcCenter: CGPoint(x: radius, y: radius))                            // bottom-left
-        corner(at: CGPoint(x: margin + w - radius, y: margin),
-               arcCenter: CGPoint(x: 0, y: radius))                                 // bottom-right
-        corner(at: CGPoint(x: margin, y: margin + h - radius),
-               arcCenter: CGPoint(x: radius, y: 0))                                 // top-left
-        corner(at: CGPoint(x: margin + w - radius, y: margin + h - radius),
-               arcCenter: CGPoint(x: 0, y: 0))                                      // top-right
+        corner(corners[0], at: CGPoint(x: margin, y: margin),
+               arcCenter: CGPoint(x: radius, y: radius))                                  // bottom-left
+        corner(corners[1], at: CGPoint(x: margin + w - radius, y: margin),
+               arcCenter: CGPoint(x: 0, y: radius))                                       // bottom-right
+        corner(corners[2], at: CGPoint(x: margin, y: margin + h - radius),
+               arcCenter: CGPoint(x: radius, y: 0))                                       // top-left
+        corner(corners[3], at: CGPoint(x: margin + w - radius, y: margin + h - radius),
+               arcCenter: CGPoint(x: 0, y: 0))                                            // top-right
+
+        // Rounded rect exactly filling the hole, matching the panel shape.
+        holeCover.frame = CGRect(x: margin, y: margin, width: w, height: h)
+        holeCover.path = CGPath(
+            roundedRect: CGRect(x: 0, y: 0, width: w, height: h),
+            cornerWidth: radius, cornerHeight: radius, transform: nil
+        )
     }
 }

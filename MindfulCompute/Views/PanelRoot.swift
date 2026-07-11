@@ -8,20 +8,47 @@ extension Color {
 struct PanelRoot: View {
     @EnvironmentObject private var manager: SessionManager
     @State private var nudged = false
+    /// Which page the panel shows. Deliberately decoupled from the phase:
+    /// at session start the start page must persist while the panel fades
+    /// out, and the switch to the break page happens invisibly once the
+    /// panel is hidden — so the panel can never reappear showing a stale
+    /// start page for a frame.
+    @State private var showBreak = false
 
     var body: some View {
         ZStack {
-            switch manager.phase {
-            case .resting:
+            if showBreak {
                 BreakView().transition(.opacity)
-            default:
+            } else {
                 StartView().transition(.opacity)
             }
         }
         .frame(width: 400)
         .background(PanelBackground())
-        .animation(.easeInOut(duration: 0.35), value: manager.phase == .resting)
         .scaleEffect(nudged ? 1.03 : 1)
+        .onAppear { showBreak = manager.phase == .resting }
+        .onReceive(NotificationCenter.default.publisher(for: .panelDidHide)) { _ in
+            // Panel is hidden mid-session; pre-switch to the break page
+            // without animation so it's ready when the session ends.
+            var snap = Transaction()
+            snap.disablesAnimations = true
+            withTransaction(snap) { showBreak = true }
+        }
+        .onChange(of: manager.phase) { _, phase in
+            switch phase {
+            case .idle:
+                // Continue after a break: visible crossfade back to start.
+                withAnimation(.easeInOut(duration: 0.35)) { showBreak = false }
+            case .resting where !showBreak:
+                // Session ended before the hide finished (sub-second race,
+                // e.g. ended early instantly): snap, the panel is dim anyway.
+                var snap = Transaction()
+                snap.disablesAnimations = true
+                withTransaction(snap) { showBreak = true }
+            default:
+                break   // .running keeps the start page while fading out
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .panelNudge)) { _ in
             withAnimation(.spring(duration: 0.22)) { nudged = true }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {

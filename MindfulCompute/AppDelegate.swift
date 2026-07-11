@@ -6,9 +6,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        overlayController = OverlayController(manager: .shared)
+        let overlay = OverlayController(manager: .shared)
+        overlayController = overlay
         let controller = PanelController(manager: .shared)
         panelController = controller
+        // The panel's dim sheet doubles as the title card's backdrop; the
+        // overlay tells the panel controller when the card is done with it.
+        overlay.onSessionDimRelease = { [weak controller] in
+            controller?.releaseSessionDim()
+        }
         controller.show()
 
         // Test hook: MINDFUL_AUTOSTART="some intention" begins a session on
