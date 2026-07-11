@@ -32,9 +32,10 @@
   beneath — it nudges, it doesn't lock you out. The menu bar stays
   bright so the countdown is always readable.
 - **The title card can be skipped.** When a session begins, your
-  intention takes over the screen with a breathing guide for about ten
-  seconds. Click anywhere on it to skip ahead. With Reduce Motion on,
-  it shows briefly without the pulsing ring.
+  intention takes over the screen for about twelve seconds while the
+  breathing guide walks one box-breathing cycle. Click anywhere on it
+  to skip ahead. With Reduce Motion on, it shows briefly without the
+  pulsing ring.
 - **Fast testing mode.** Launch with `MINDFUL_SECONDS=1` in the
   environment and the slider counts seconds instead of minutes. Add
   `MINDFUL_AUTOSTART="some intention"` to begin a session immediately
@@ -63,19 +64,19 @@ session lasts 5 seconds). Each line should hold true:
 - [x] The rest of the screen (Dock included) sits behind a dark dimmer
       while the panel is up; the menu bar stays bright. Clicks still
       reach windows beneath the dim.
-- [x] The panel itself is excluded from the dim — it reads noticeably
-      brighter than everything behind it.
-- [ ] Drag the panel around: the bright cutout follows it without lag
-      or leaving dim edges over the panel.
+- [ ] The panel has an opaque background, so it reads noticeably
+      brighter than everything behind the dim — in light and dark mode.
+- [ ] Drag the panel around quickly: it stays crisp with no dim
+      artifacts (the panel no longer depends on a cutout in the dim).
 
 ### Session start (title card)
 - [x] On **Begin**, the bowl plays and the screen darkens further; your
       intention appears full-screen between two thin rules, with
       "THE NEXT N MINUTES" above it.
-- [x] A breathing ring at the bottom swells ("Breathe in") and settles
-      ("Breathe out") on a slow 4-second cadence.
-- [x] After about ten seconds the card fades out, then the dimmer fades
-      away, leaving the desktop untouched.
+- [ ] The breathing ring walks a single box-breathing cycle: 4s swell
+      ("Breathe in"), 4s steady ("Hold"), 4s settle ("Breathe out").
+- [ ] After about twelve seconds the card fades out, then the dimmer
+      fades away, leaving the desktop untouched.
 - [x] Clicking anywhere on the title card skips it (card fades, then dim).
 - [ ] With Reduce Motion on, the card is shorter and the ring holds still.
 

@@ -12,16 +12,23 @@ targets:
       - path: MindfulCompute
       - path: assets/sounds
         buildPhase: resources
+      - path: assets/AppIcon.icns
+        buildPhase: resources
+    info:
+      path: MindfulCompute/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleIconFile: AppIcon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSHumanReadableCopyright: Muchen He
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.muchen.MindfulCompute
-        MARKETING_VERSION: "1.1"
+        MARKETING_VERSION: "1.2"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         SWIFT_VERSION: "6.0"
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
         ENABLE_HARDENED_RUNTIME: NO
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_LSUIElement: YES
-        INFOPLIST_KEY_NSHumanReadableCopyright: "Muchen He"

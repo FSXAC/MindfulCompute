@@ -59,3 +59,8 @@ MINDFUL_SECONDS=1 build/Build/Products/Release/MindfulCompute.app/Contents/MacOS
   MindfulCompute item the first time — new items are often hidden by
   default.
 - Sounds live in `assets/sounds` and are bundled at build time.
+
+## Credits
+
+- Tibetan singing bowl 1.wav by itinerantmonk108 —
+  https://freesound.org/s/553049/ — License: Creative Commons 0

@@ -71,21 +71,25 @@ struct BreathGuide: View {
                 .font(.system(size: 15, weight: .medium))
                 .tracking(2.5)
                 .foregroundStyle(.white.opacity(0.85))
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.5), value: label)
         }
         .task {
             guard !reduceMotion else {
                 label = "Take a slow breath"
                 return
             }
-            while !Task.isCancelled {
-                withAnimation(.easeInOut(duration: 4)) { inhaling = true }
-                label = "Breathe in"
-                try? await Task.sleep(for: .seconds(4))
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 4)) { inhaling = false }
-                label = "Breathe out"
-                try? await Task.sleep(for: .seconds(4))
-            }
+            // One box-breathing cycle, matched to the 12-second card:
+            // 4s in, 4s hold, 4s out.
+            withAnimation(.easeInOut(duration: 4)) { inhaling = true }
+            label = "Breathe in"
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            label = "Hold"
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 4)) { inhaling = false }
+            label = "Breathe out"
         }
     }
 }

@@ -23,6 +23,9 @@ struct PanelRoot: View {
     }
 }
 
+/// Opaque on purpose: the panel always floats over the dimmer, and an
+/// opaque surface neither picks up the gloom (washed-out glass) nor needs
+/// a cutout in the dim that would have to chase the panel during drags.
 private struct PanelBackground: View {
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 26, style: .continuous)
@@ -30,27 +33,14 @@ private struct PanelBackground: View {
 
     var body: some View {
         ZStack {
-            VisualEffectBackdrop()
+            shape.fill(Color(nsColor: .windowBackgroundColor))
             LinearGradient(
-                colors: [Color.sage.opacity(0.08), Color.sage.opacity(0.02)],
+                colors: [Color.sage.opacity(0.10), Color.sage.opacity(0.03)],
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .clipShape(shape)
         }
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(.separator.opacity(0.5), lineWidth: 1))
+        .overlay(shape.strokeBorder(.separator.opacity(0.6), lineWidth: 1))
     }
-}
-
-/// Behind-window vibrancy so the panel reads as native glass.
-private struct VisualEffectBackdrop: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .popover
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }

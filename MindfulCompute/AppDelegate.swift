@@ -6,9 +6,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        overlayController = OverlayController(manager: .shared)
         let controller = PanelController(manager: .shared)
         panelController = controller
-        overlayController = OverlayController(manager: .shared, panel: controller.window)
         controller.show()
 
         // Test hook: MINDFUL_AUTOSTART="some intention" begins a session on

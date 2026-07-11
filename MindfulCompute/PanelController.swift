@@ -10,9 +10,6 @@ final class FloatingPanel: NSPanel {
 @MainActor
 final class PanelController {
     private let panel: FloatingPanel
-
-    /// Exposed so the dimmer can cut a hole around the panel.
-    var window: NSWindow { panel }
     private let manager: SessionManager
     private var cancellables = Set<AnyCancellable>()
     private var hasPositioned = false

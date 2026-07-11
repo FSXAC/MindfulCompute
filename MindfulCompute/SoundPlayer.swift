@@ -6,7 +6,6 @@ final class SoundPlayer {
 
     enum Sound: String {
         case bowl = "tibetan_bowl"
-        case gong = "gong"
     }
 
     private var player: AVAudioPlayer?

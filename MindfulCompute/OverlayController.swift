@@ -11,9 +11,6 @@ final class OverlayModel: ObservableObject {
     /// `cardOpacity` so fades are explicit rather than transition-dependent.
     @Published var titleCard = false
     @Published var cardOpacity: Double = 0
-    /// Panel frame in global screen coordinates; the dim leaves this region
-    /// undimmed so the panel's glass samples bright content.
-    @Published var cutout: CGRect?
     var intention = ""
     var minutes = 25
     var onSkip: (() -> Void)?
@@ -26,15 +23,13 @@ final class OverlayModel: ObservableObject {
 final class OverlayController {
     private let manager: SessionManager
     private let model = OverlayModel()
-    private let panel: NSWindow
     private var windows: [NSWindow] = []
     private var mainWindow: NSWindow?
     private var sequenceTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
 
-    init(manager: SessionManager, panel: NSWindow) {
+    init(manager: SessionManager) {
         self.manager = manager
-        self.panel = panel
         model.onSkip = { [weak self] in self?.endTitleCard() }
 
         manager.$phase
@@ -47,43 +42,6 @@ final class OverlayController {
                 }
             }
             .store(in: &cancellables)
-
-    }
-
-    /// Window drags are handled by the window server, so move notifications
-    /// trail the actual frame. Polling each frame keeps the hole glued to
-    /// the panel; the timer only runs while the dim is visible.
-    private var pollTimer: Timer?
-    private var lastPanelFrame = CGRect.zero
-
-    private func startTrackingPanel() {
-        guard pollTimer == nil else { return }
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            // Timer is scheduled on the main run loop.
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                if self.panel.frame != self.lastPanelFrame {
-                    self.updateCutout()
-                }
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        pollTimer = timer
-    }
-
-    private func stopTrackingPanel() {
-        pollTimer?.invalidate()
-        pollTimer = nil
-    }
-
-    private func updateCutout() {
-        let frame = manager.phase == .running ? nil : panel.frame
-        lastPanelFrame = frame ?? .zero
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            model.cutout = frame
-        }
     }
 
     private func showDim() {
@@ -99,16 +57,12 @@ final class OverlayController {
         }
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
-        updateCutout()
-        startTrackingPanel()
         model.dimmed = true
     }
 
     private func runTitleSequence() {
-        stopTrackingPanel()
         model.intention = manager.trimmedIntention
         model.minutes = Int(manager.minutes)
-        model.cutout = nil
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
         model.dimmed = true
@@ -117,7 +71,7 @@ final class OverlayController {
         mainWindow?.ignoresMouseEvents = false
 
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let cardSeconds: Double = reduceMotion ? 5 : 10.5
+        let cardSeconds: Double = reduceMotion ? 5 : 12
         sequenceTask = Task { [weak self] in
             // Let the mount at opacity 0 commit first, so the rise to 1
             // animates instead of coalescing into a single frame.
@@ -177,7 +131,7 @@ final class OverlayController {
             window.isReleasedWhenClosed = false
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.contentView = NSHostingView(
-                rootView: OverlayView(model: model, isMain: isMain, screenFrame: screen.frame)
+                rootView: OverlayView(model: model, isMain: isMain)
             )
             window.setFrame(screen.frame, display: true)
             windows.append(window)
@@ -189,7 +143,6 @@ final class OverlayController {
 struct OverlayView: View {
     @ObservedObject var model: OverlayModel
     let isMain: Bool
-    let screenFrame: CGRect
 
     // Values look lighter on screen than they read here — the overlay
     // composites against already-bright content — so they are set by eye.
@@ -198,22 +151,9 @@ struct OverlayView: View {
         return model.dimmed ? 0.60 : 0
     }
 
-    /// The panel's frame converted from global (bottom-left origin) screen
-    /// coordinates to this window's local top-left-origin SwiftUI space.
-    private var hole: CGRect? {
-        guard let cutout = model.cutout, cutout.intersects(screenFrame) else { return nil }
-        return CGRect(
-            x: cutout.minX - screenFrame.minX,
-            y: screenFrame.maxY - cutout.maxY,
-            width: cutout.width,
-            height: cutout.height
-        )
-    }
-
     var body: some View {
         ZStack {
-            DimShape(hole: hole)
-                .fill(Color.black.opacity(dimOpacity), style: FillStyle(eoFill: true))
+            Color.black.opacity(dimOpacity)
                 .animation(.easeInOut(duration: model.titleCard ? 1.2 : 2.0), value: dimOpacity)
             if isMain, model.titleCard {
                 TitleCardView(intention: model.intention, minutes: model.minutes)
@@ -226,25 +166,5 @@ struct OverlayView: View {
             }
         }
         .ignoresSafeArea()
-    }
-}
-
-/// Full-screen rectangle with a rounded hole where the panel sits; drawn
-/// with even-odd fill so the hole stays undimmed.
-private struct DimShape: Shape {
-    var hole: CGRect?
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.addRect(rect)
-        if let hole {
-            // Matches the panel's corner radius so no dim peeks past it.
-            path.addRoundedRect(
-                in: hole,
-                cornerSize: CGSize(width: 26, height: 26),
-                style: .continuous
-            )
-        }
-        return path
     }
 }
