@@ -112,6 +112,11 @@ final class PanelController {
             .store(in: &cancellables)
     }
 
+    // The glass panel is never alpha-faded: a translucent material mid-fade
+    // composites the desktop, the dim, and its own edges into a mess. The
+    // panel always appears and disappears in a single beat; all gradual
+    // choreography belongs to the dim sheet.
+
     func show() {
         transitionTask?.cancel()
         transitionTask = nil
@@ -128,60 +133,83 @@ final class PanelController {
         syncDimSheet()
         dimSheet.ignoresMouseEvents = false
 
-        // If the sheet is on screen without a parent, it is still carrying
-        // the deep session dim (the session just ended, possibly while the
-        // title card or its fade-out was underway).
-        let sheetCarriesSessionDim = dimSheet.isVisible && dimSheet.parent == nil
-        if dimSheet.parent == nil {
-            if !sheetCarriesSessionDim { dimSheet.alphaValue = 0 }
-            panel.addChildWindow(dimSheet, ordered: .below)
+        // Already up (Continue after a break, "bring panel to front"):
+        // nothing to choreograph.
+        if panel.isVisible {
+            panel.makeKeyAndOrderFront(nil)
+            panel.orderFrontRegardless()
+            return
         }
 
-        if sheetCarriesSessionDim {
-            // Hand the dim back: the panel fades in while the hole reopens
-            // and the dim eases from title-card depth to its resting level.
-            panel.alphaValue = 0
-            panel.makeKeyAndOrderFront(nil)
-            panel.orderFrontRegardless()
-            dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0.7)
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.7
-                panel.animator().alphaValue = 1
-                dimSheet.animator().alphaValue = 1   // may be mid release-fade
-            }
+        if manager.phase == .resting {
+            showDimFirst()
         } else {
-            panel.alphaValue = 1
-            dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0)
-            panel.makeKeyAndOrderFront(nil)
-            panel.orderFrontRegardless()
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 2.0
-                dimSheet.animator().alphaValue = 1
-            }
+            showPanelFirst()
         }
     }
 
-    /// Session started: the panel dissolves while the dim deepens and its
-    /// hole closes, then the sheet is detached to serve as the title card's
-    /// backdrop. The screen darkens monotonically — no bright gap.
-    private func beginSessionTransition() {
-        transitionTask?.cancel()
-        dimSheet.ignoresMouseEvents = true   // stop gating clicks once committed
-        syncDimSheet()
-        dimContent.setDim(level: DimSheetView.deepLevel, holeClosed: true, duration: 0.8)
+    /// Launch / unlock: the panel is the point — it appears immediately
+    /// and the dim gathers around it.
+    private func showPanelFirst() {
+        if dimSheet.parent == nil {
+            if !dimSheet.isVisible { dimSheet.alphaValue = 0 }
+            panel.addChildWindow(dimSheet, ordered: .below)
+        }
+        dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0)
+        panel.makeKeyAndOrderFront(nil)
+        panel.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.8
-            panel.animator().alphaValue = 0
+            context.duration = 2.0
+            dimSheet.animator().alphaValue = 1
+        }
+    }
+
+    /// A session just ended: the bowl rings while the dim gathers over the
+    /// screen first (hole closed), and the break panel then appears in
+    /// place — announced by the dim rather than popping unheralded.
+    private func showDimFirst() {
+        // The sheet may still be up from the title card (deep dim, no
+        // parent, possibly mid release-fade); otherwise it starts unseen.
+        if let parent = dimSheet.parent { parent.removeChildWindow(dimSheet) }
+        let carryingDim = dimSheet.isVisible
+        if !carryingDim { dimSheet.alphaValue = 0 }
+        dimContent.setDim(
+            level: DimSheetView.restLevel, holeClosed: true,
+            duration: carryingDim ? 1.2 : 0
+        )
+        dimSheet.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 1.2
+            dimSheet.animator().alphaValue = 1
         }
         transitionTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(0.85))
+            try? await Task.sleep(for: .seconds(1.3))
             guard let self, !Task.isCancelled else { return }
-            // Detach so the sheet outlives the panel under the title card.
-            self.panel.removeChildWindow(self.dimSheet)
-            self.panel.orderOut(nil)
-            self.panel.alphaValue = 1
-            NotificationCenter.default.post(name: .panelDidHide, object: nil)
+            self.panel.makeKeyAndOrderFront(nil)
+            self.panel.orderFrontRegardless()
+            self.panel.addChildWindow(self.dimSheet, ordered: .below)
+            self.dimContent.setDim(level: DimSheetView.restLevel, holeClosed: false, duration: 0)
         }
+    }
+
+    /// Session started: the dim swallows the panel's spot in the same
+    /// frame the panel disappears, then deepens into the title card's
+    /// backdrop. The screen darkens monotonically — no bright gap, and no
+    /// half-faded glass.
+    private func beginSessionTransition() {
+        transitionTask?.cancel()
+        transitionTask = nil
+        dimSheet.ignoresMouseEvents = true   // stop gating clicks once committed
+        syncDimSheet()
+        // Close the hole and push it to the render server before the panel
+        // goes, so its spot can never flash bright.
+        dimContent.setDim(level: DimSheetView.restLevel, holeClosed: true, duration: 0)
+        CATransaction.flush()
+        // Detach so the sheet outlives the panel under the title card.
+        panel.removeChildWindow(dimSheet)
+        panel.orderOut(nil)
+        dimContent.setDim(level: DimSheetView.deepLevel, holeClosed: true, duration: 1.0)
+        NotificationCenter.default.post(name: .panelDidHide, object: nil)
     }
 
     /// The title card has finished: fade the session dim away and release
@@ -208,8 +236,10 @@ final class PanelController {
     }
 
     /// A click landed on the dim: pulse the panel and give it key focus.
+    /// Ignored while the panel is hidden (mid-session, or during the
+    /// dim-first entrance) so a click can't summon it out of turn.
     private func nudge() {
-        guard manager.phase != .running else { return }
+        guard manager.phase != .running, panel.isVisible else { return }
         panel.makeKeyAndOrderFront(nil)
         NotificationCenter.default.post(name: .panelNudge, object: nil)
     }

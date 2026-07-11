@@ -80,10 +80,10 @@ session lasts 5 seconds). Each line should hold true:
 - [x] On **Begin**, the bowl plays and the screen darkens further; your
       intention appears full-screen between two thin rules, with
       "THE NEXT N MINUTES" above it.
-- [ ] Between **Begin** and the title card the screen only ever gets
-      darker: the panel dissolves into the deepening dim in one motion —
-      no flash back to full brightness (the dim is a single sheet now,
-      handed from panel to card).
+- [ ] On **Begin** the panel vanishes in a single beat — the dim swallows
+      its spot in the same frame (no bright flash, no half-transparent
+      glass lingering) — and the whole screen deepens toward the title
+      card. Glass is never alpha-faded; only the dim animates.
 - [x] The breathing ring walks a single box-breathing cycle: 4s swell
       ("Breathe in"), 4s steady ("Hold"), 4s settle ("Breathe out").
 - [x] After about twelve seconds the card fades out, then the dimmer
@@ -104,13 +104,16 @@ session lasts 5 seconds). Each line should hold true:
 ### Session end
 - [x] The bowl plays (same sound as the start — the gong is retired) and
       the break panel appears on its own — even over a fullscreen app.
-- [x] The dimmer fades back in with the break panel and stays through
-      **Continue** and the next start panel, until a session begins.
+- [ ] The bowl rings and the dimmer fades in over the screen first; the
+      break panel then appears in place about a second later, fully
+      formed — never half-faded glass, never an unannounced jump scare.
+- [x] The dimmer stays through **Continue** and the next start panel,
+      until a session begins.
 - [x] The panel shows a quote and "You set out to: …" with your intention.
-- [ ] The break panel appears already showing the reflection page — never
+- [x] The break panel appears already showing the reflection page — never
       a split-second flash of the start page first (the page switches
       while the panel is hidden mid-session).
-- [ ] After **Continue**, the crossfade back to the start page is clean:
+- [x] After **Continue**, the crossfade back to the start page is clean:
       no flashing or misaligned edges around the panel while it changes
       height (the dim's hole now tracks resizes without rebuilding).
 - [x] The breathing dot pulses slowly (and holds still if System
@@ -126,7 +129,7 @@ session lasts 5 seconds). Each line should hold true:
       the journal.
 
 ### Unlock behavior
-- [ ] With no session running, lock and unlock the Mac: the intention
+- [x] With no session running, lock and unlock the Mac: the intention
       panel is waiting for you.
-- [ ] Enable "Start at login", log out and back in (or reboot): the app
+- [x] Enable "Start at login", log out and back in (or reboot): the app
       is running and the panel appears.
