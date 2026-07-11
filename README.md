@@ -12,7 +12,9 @@ that's saved to a journal.
 - The intention panel appears at launch and every time the Mac unlocks
   (unless a session is already running). It floats above all windows and
   can be dragged anywhere. While it waits, the rest of the screen sits
-  behind a gentle dimmer that only lifts once a session begins.
+  behind a dimmer that blocks stray clicks (each one pulses the panel)
+  and only lifts once a session begins; the menu bar and keyboard stay
+  usable.
 - Starting a session plays a Tibetan bowl and shows your intention as a
   full-screen chapter-style title card with a slow breathing guide,
   before the dimmer fades and the desktop returns. The same bowl marks

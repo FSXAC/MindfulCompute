@@ -27,10 +27,12 @@
 - **There is no close button on the panel — by design.** The panel stays
   until you commit to a session. It is draggable if it's in the way, and
   quitting the app from the menu always works.
-- **The dimmer is click-through.** The rest of the screen dims while the
-  intention or break panel is up, but clicks still reach the windows
-  beneath — it nudges, it doesn't lock you out. The menu bar stays
-  bright so the countdown is always readable.
+- **The dimmer blocks clicks.** While the intention or break panel is
+  up, clicks on the dimmed area go nowhere — each one pulses the panel
+  as a reminder of where your attention goes next. Escape hatches: the
+  menu bar stays fully usable (end early, quit), Cmd+Tab still switches
+  apps, and keyboard input to other apps is not captured — only the
+  mouse is gated.
 - **The title card can be skipped.** When a session begins, your
   intention takes over the screen for about twelve seconds while the
   breathing guide walks one box-breathing cycle. Click anywhere on it
@@ -61,13 +63,18 @@ session lasts 5 seconds). Each line should hold true:
       the "For N minutes" label follows it.
 - [x] Pressing Return in the intention field starts the session, same as
       clicking **Begin**.
-- [x] The rest of the screen (Dock included) sits behind a dark dimmer
-      while the panel is up; the menu bar stays bright. Clicks still
-      reach windows beneath the dim.
-- [ ] The panel has an opaque background, so it reads noticeably
-      brighter than everything behind the dim — in light and dark mode.
-- [ ] Drag the panel around quickly: it stays crisp with no dim
-      artifacts (the panel no longer depends on a cutout in the dim).
+- [ ] The rest of the screen (Dock included) sits behind a dark dimmer
+      while the panel is up; the menu bar stays bright.
+- [ ] Clicking anywhere on the dimmed area does nothing to the app
+      beneath — instead the panel pulses briefly and takes keyboard
+      focus.
+- [ ] The menu bar still works while the dim is up, and Cmd+Tab still
+      switches apps.
+- [ ] The panel is glass again — it samples the bright desktop behind
+      it, not the dim, and reads clearly brighter than its surroundings.
+- [ ] Drag the panel around as fast as you like: the bright region is
+      glued to it with zero lag (it moves in the same window-server
+      transaction as the panel).
 
 ### Session start (title card)
 - [x] On **Begin**, the bowl plays and the screen darkens further; your

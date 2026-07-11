@@ -2,11 +2,11 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Shared state for the full-screen overlay windows: the dimmer that focuses
-/// attention on the panel, and the chapter-style title card at session start.
+/// Shared state for the title-card overlay shown at session start.
+/// (Ambient dimming while the panel waits is handled by the panel's own
+/// child window — see PanelController — so it can never lag a drag.)
 @MainActor
 final class OverlayModel: ObservableObject {
-    @Published var dimmed = false
     /// Whether the title card is mounted; its visibility is driven by
     /// `cardOpacity` so fades are explicit rather than transition-dependent.
     @Published var titleCard = false
@@ -16,9 +16,8 @@ final class OverlayModel: ObservableObject {
     var onSkip: (() -> Void)?
 }
 
-/// One click-through window per screen. The dimmer fades in whenever the
-/// intention or break panel is up, and only leaves once a session starts —
-/// after the title card has faded in and out.
+/// One full-screen window per display, used only for the deep dim behind
+/// the session-start title card.
 @MainActor
 final class OverlayController {
     private let manager: SessionManager
@@ -37,27 +36,11 @@ final class OverlayController {
             .receive(on: RunLoop.main)
             .sink { [weak self] phase in
                 switch phase {
-                case .idle, .resting: self?.showDim()
+                case .idle, .resting: self?.dismissTitleOverlay()
                 case .running: self?.runTitleSequence()
                 }
             }
             .store(in: &cancellables)
-    }
-
-    private func showDim() {
-        sequenceTask?.cancel()
-        if model.titleCard {
-            model.cardOpacity = 0
-            mainWindow?.ignoresMouseEvents = true
-            sequenceTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(1.1))
-                guard !Task.isCancelled else { return }
-                self?.model.titleCard = false
-            }
-        }
-        ensureWindows()
-        for window in windows { window.orderFrontRegardless() }
-        model.dimmed = true
     }
 
     private func runTitleSequence() {
@@ -65,7 +48,6 @@ final class OverlayController {
         model.minutes = Int(manager.minutes)
         ensureWindows()
         for window in windows { window.orderFrontRegardless() }
-        model.dimmed = true
         model.titleCard = true
         model.cardOpacity = 0
         mainWindow?.ignoresMouseEvents = false
@@ -92,10 +74,24 @@ final class OverlayController {
         sequenceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.1))   // card fades out
             guard let self, !Task.isCancelled, self.manager.phase == .running else { return }
-            self.model.titleCard = false                // unmount, already invisible
-            self.model.dimmed = false
-            try? await Task.sleep(for: .seconds(2.2))   // dim fades out
+            self.model.titleCard = false                // dim fades out
+            try? await Task.sleep(for: .seconds(2.2))
             guard !Task.isCancelled, self.manager.phase == .running else { return }
+            for window in self.windows { window.orderOut(nil) }
+        }
+    }
+
+    /// A session stopped while the title card was up (e.g. ended early):
+    /// fade everything out and hand the dimming back to the panel.
+    private func dismissTitleOverlay() {
+        sequenceTask?.cancel()
+        guard model.titleCard else { return }
+        model.cardOpacity = 0
+        model.titleCard = false
+        mainWindow?.ignoresMouseEvents = true
+        sequenceTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.2))
+            guard let self, !Task.isCancelled else { return }
             for window in self.windows { window.orderOut(nil) }
         }
     }
@@ -144,17 +140,15 @@ struct OverlayView: View {
     @ObservedObject var model: OverlayModel
     let isMain: Bool
 
-    // Values look lighter on screen than they read here — the overlay
-    // composites against already-bright content — so they are set by eye.
-    private var dimOpacity: Double {
-        if model.titleCard { return 0.82 }
-        return model.dimmed ? 0.60 : 0
-    }
-
     var body: some View {
         ZStack {
-            Color.black.opacity(dimOpacity)
-                .animation(.easeInOut(duration: model.titleCard ? 1.2 : 2.0), value: dimOpacity)
+            // Reads lighter on screen than the number suggests — it
+            // composites against already-bright content — so set by eye.
+            Color.black.opacity(model.titleCard ? 0.82 : 0)
+                .animation(
+                    .easeInOut(duration: model.titleCard ? 1.2 : 2.0),
+                    value: model.titleCard
+                )
             if isMain, model.titleCard {
                 TitleCardView(intention: model.intention, minutes: model.minutes)
                     .opacity(model.cardOpacity)
