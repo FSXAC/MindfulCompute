@@ -26,7 +26,10 @@ final class PanelController {
     /// it is built from solid-color layers, which cost no backing memory.
     private let dimSheet: NSWindow
     private let dimContent: DimSheetView
-    private static let sheetMargin: CGFloat = 5000
+    /// Keeps the sheet under the compositor's 16384-pixel surface limit on
+    /// 2x displays (panel + 2 * margin must stay below 8192 points) while
+    /// still covering any realistic drag range across displays.
+    private static let sheetMargin: CGFloat = 3500
 
     init(manager: SessionManager) {
         self.manager = manager
@@ -155,6 +158,9 @@ private final class DimSheetView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        // Layer-hosting (custom layer assigned before wantsLayer), so AppKit
+        // never repaints or clears the manually managed sublayers.
+        layer = CALayer()
         wantsLayer = true
     }
 
