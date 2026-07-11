@@ -17,6 +17,10 @@ final class SessionManager: ObservableObject {
     @Published var reflection: String = ""
     @Published var remaining: TimeInterval = 0
     @Published var quote: Quote = Quotes.random()
+    /// How long the just-finished session ran, in slider units (minutes, or
+    /// seconds under MINDFUL_SECONDS) — snapshotted at finish() so the break
+    /// header doesn't drift while the user lingers on the break panel.
+    private(set) var completedUnits: Int = 25
 
     /// Fired when the menu asks for the panel to be brought forward.
     let panelRequests = PassthroughSubject<Void, Never>()
@@ -94,6 +98,9 @@ final class SessionManager: ObservableObject {
         timer?.invalidate()
         timer = nil
         remaining = 0
+        if let start = sessionStart {
+            completedUnits = max(1, Int((Date().timeIntervalSince(start) / secondsPerUnit).rounded()))
+        }
         quote = Quotes.random()
         phase = .resting
         SoundPlayer.shared.play(.bowl)

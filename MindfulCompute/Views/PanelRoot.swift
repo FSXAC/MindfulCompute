@@ -1,8 +1,11 @@
 import SwiftUI
 
 extension Color {
-    /// Muted sage — the app's single accent.
+    /// Muted sage — the accent of setting out (start panel, morning-cool).
     static let sage = Color(.displayP3, red: 0.45, green: 0.54, blue: 0.42)
+    /// Warm ember — the accent of winding down (break panel, lamplight-warm),
+    /// so the two pages read differently at a glance.
+    static let ember = Color(.displayP3, red: 0.72, green: 0.55, blue: 0.36)
 }
 
 struct PanelRoot: View {
@@ -24,7 +27,7 @@ struct PanelRoot: View {
             }
         }
         .frame(width: 400)
-        .background(PanelBackground())
+        .background(PanelBackground(accent: showBreak ? .ember : .sage))
         .scaleEffect(nudged ? 1.03 : 1)
         .onAppear { showBreak = manager.phase == .resting }
         .onReceive(NotificationCenter.default.publisher(for: .panelDidHide)) { _ in
@@ -59,6 +62,10 @@ struct PanelRoot: View {
 }
 
 private struct PanelBackground: View {
+    /// Sage for the start page, ember for the break page — the wash shifts
+    /// warm so the break panel can't be mistaken for the start panel.
+    let accent: Color
+
     // Circular (not continuous) corners, matching the corner pieces of the
     // dim sheet's hole exactly — see DimSheetView.
     private var shape: RoundedRectangle {
@@ -69,7 +76,7 @@ private struct PanelBackground: View {
         ZStack {
             VisualEffectBackdrop()
             LinearGradient(
-                colors: [Color.sage.opacity(0.08), Color.sage.opacity(0.02)],
+                colors: [accent.opacity(0.10), accent.opacity(0.03)],
                 startPoint: .top,
                 endPoint: .bottom
             )

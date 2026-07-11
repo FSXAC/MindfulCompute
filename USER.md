@@ -80,12 +80,14 @@ session lasts 5 seconds). Each line should hold true:
 - [x] On **Begin**, the bowl plays and the screen darkens further; your
       intention appears full-screen between two thin rules, with
       "THE NEXT N MINUTES" above it.
-- [ ] On **Begin** the panel vanishes in a single beat — the dim swallows
-      its spot in the same frame (no bright flash, no half-transparent
-      glass lingering) — and the whole screen deepens toward the title
-      card. Glass is never alpha-faded; only the dim animates.
+- [x] Between **Begin** and the title card the screen only ever gets
+      darker: the panel dissolves into the deepening dim in one motion —
+      no flash back to full brightness (the dim is a single sheet now,
+      handed from panel to card).
 - [x] The breathing ring walks a single box-breathing cycle: 4s swell
       ("Breathe in"), 4s steady ("Hold"), 4s settle ("Breathe out").
+- [ ] The breathing ring sits just below the middle of the screen, one
+      centred group with the intention — no longer down by the Dock.
 - [x] After about twelve seconds the card fades out, then the dimmer
       fades away, leaving the desktop untouched.
 - [x] Clicking anywhere on the title card skips it (card fades, then dim).
@@ -104,12 +106,13 @@ session lasts 5 seconds). Each line should hold true:
 ### Session end
 - [x] The bowl plays (same sound as the start — the gong is retired) and
       the break panel appears on its own — even over a fullscreen app.
-- [ ] The bowl rings and the dimmer fades in over the screen first; the
-      break panel then appears in place about a second later, fully
-      formed — never half-faded glass, never an unannounced jump scare.
-- [x] The dimmer stays through **Continue** and the next start panel,
-      until a session begins.
+- [x] The dimmer fades back in with the break panel and stays through
+      **Continue** and the next start panel, until a session begins.
 - [x] The panel shows a quote and "You set out to: …" with your intention.
+- [ ] The break panel is unmistakably not the start panel: warm amber
+      accent everywhere sage used to be (dot, wash, Continue button) and
+      an "N MINUTES LATER" caps header — the title card's "THE NEXT N
+      MINUTES", answered.
 - [x] The break panel appears already showing the reflection page — never
       a split-second flash of the start page first (the page switches
       while the panel is hidden mid-session).

@@ -3,12 +3,26 @@ import SwiftUI
 struct BreakView: View {
     @EnvironmentObject private var manager: SessionManager
 
+    /// Bookends the title card's "THE NEXT N MINUTES" — a film-style cut
+    /// that instantly marks this page as the end of a session, not the start.
+    private var eyebrow: String {
+        manager.completedUnits == 1
+            ? "1 MINUTE LATER"
+            : "\(manager.completedUnits) MINUTES LATER"
+    }
+
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 14) {
                 BreathingGlyph()
-                Text("Time to step away")
-                    .font(.system(size: 23, weight: .medium, design: .serif))
+                VStack(spacing: 10) {
+                    Text(eyebrow)
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(4)
+                        .foregroundStyle(Color.ember)
+                    Text("Time to step away")
+                        .font(.system(size: 23, weight: .medium, design: .serif))
+                }
                 if !manager.trimmedIntention.isEmpty {
                     Text("You set out to: “\(manager.trimmedIntention)”")
                         .font(.footnote)
@@ -59,7 +73,7 @@ struct BreakView: View {
             }
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
-            .tint(.sage)
+            .tint(.ember)
             .keyboardShortcut(.defaultAction)
         }
         .padding(28)
@@ -73,11 +87,11 @@ struct BreathingGlyph: View {
 
     var body: some View {
         Circle()
-            .fill(Color.sage.gradient)
+            .fill(Color.ember.gradient)
             .frame(width: 14, height: 14)
             .scaleEffect(inhale ? 1.3 : 0.8)
             .opacity(inhale ? 0.95 : 0.55)
-            .shadow(color: .sage.opacity(0.5), radius: inhale ? 10 : 4)
+            .shadow(color: .ember.opacity(0.5), radius: inhale ? 10 : 4)
             .frame(height: 24)
             .onAppear {
                 guard !reduceMotion else { return }

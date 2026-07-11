@@ -1,12 +1,15 @@
 import SwiftUI
 
 /// Chapter-style full-screen card shown when a session begins: the intention
-/// set between thin rules, with a slow breathing guide at the bottom.
+/// set between thin rules, with a slow breathing guide beneath it.
 struct TitleCardView: View {
     let intention: String
     let minutes: Int
 
     var body: some View {
+        // The intention and the breathing guide center together as one
+        // group, so the guide sits just below the middle of the screen
+        // rather than down by the Dock.
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: 36) {
@@ -26,9 +29,9 @@ struct TitleCardView: View {
                 rule
             }
             .padding(.horizontal, 60)
-            Spacer()
             BreathGuide()
-                .padding(.bottom, 90)
+                .padding(.top, 72)
+            Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
