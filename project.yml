@@ -25,10 +25,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.muchen.MindfulCompute
-        MARKETING_VERSION: "1.2.1"
+        MARKETING_VERSION: "1.2.2"
         CURRENT_PROJECT_VERSION: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         SWIFT_VERSION: "6.0"
         CODE_SIGN_IDENTITY: "-"
         CODE_SIGN_STYLE: Manual
-        ENABLE_HARDENED_RUNTIME: NO
+        # Hardened runtime blocks DYLD injection into an always-running login
+        # item that takes keystrokes; it costs nothing for local ad-hoc use.
+        ENABLE_HARDENED_RUNTIME: YES

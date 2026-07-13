@@ -48,6 +48,9 @@ final class OverlayController {
     }
 
     private func runTitleSequence() {
+        // A pending teardown from the previous session's card would otherwise
+        // order this window out mid-card (fast Continue -> Begin, MINDFUL_SECONDS).
+        sequenceTask?.cancel()
         model.intention = manager.trimmedIntention
         model.minutes = Int(manager.minutes)
         let window = ensureWindow()
@@ -70,31 +73,38 @@ final class OverlayController {
         }
     }
 
+    /// The card ran to its end while the session continues: fade it out and
+    /// let the session dim fade with it.
     private func endTitleCard() {
         sequenceTask?.cancel()
         guard manager.phase == .running else { return }
+        fadeOutCard(releaseDim: true)
+    }
+
+    /// A session stopped while the title card was up (e.g. ended early):
+    /// fade the card out. The panel reclaims the dim itself here
+    /// (PanelController.showDimFirst), so this must NOT release the session
+    /// dim — doing so would double-fade the sheet.
+    private func dismissTitleOverlay() {
+        sequenceTask?.cancel()
+        guard model.titleCard else { return }
+        fadeOutCard(releaseDim: false)
+    }
+
+    /// Fade the card to transparent — kept mounted so `.animation(value:)` on
+    /// cardOpacity actually renders the ~1s fade — then unmount it and hide
+    /// the window. `releaseDim` fades the session dim away with the card; it
+    /// implies the session is still running, so the teardown re-guards phase
+    /// against a stop whose cancellation hasn't been delivered yet.
+    private func fadeOutCard(releaseDim: Bool) {
         model.cardOpacity = 0
         window?.ignoresMouseEvents = true
         sequenceTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.1))   // card fades out
-            guard let self, !Task.isCancelled, self.manager.phase == .running else { return }
-            self.model.titleCard = false
-            self.onSessionDimRelease?()                 // dim fades out
-            self.window?.orderOut(nil)
-        }
-    }
-
-    /// A session stopped while the title card was up (e.g. ended early):
-    /// fade the card out; the panel reclaims the dim on its own.
-    private func dismissTitleOverlay() {
-        sequenceTask?.cancel()
-        guard model.titleCard else { return }
-        model.cardOpacity = 0
-        model.titleCard = false
-        window?.ignoresMouseEvents = true
-        sequenceTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.1))
             guard let self, !Task.isCancelled else { return }
+            if releaseDim { guard self.manager.phase == .running else { return } }
+            self.model.titleCard = false
+            if releaseDim { self.onSessionDimRelease?() }   // dim fades out
             self.window?.orderOut(nil)
         }
     }

@@ -1,4 +1,5 @@
 import AVFoundation
+import os
 
 @MainActor
 final class SoundPlayer {
@@ -8,13 +9,26 @@ final class SoundPlayer {
         case bowl = "tibetan_bowl"
     }
 
-    private var player: AVAudioPlayer?
+    private static let log = Logger(subsystem: "MindfulCompute", category: "SoundPlayer")
+
+    private var players: [Sound: AVAudioPlayer] = [:]
 
     func play(_ sound: Sound) {
+        guard let player = player(for: sound) else { return }
+        // Rings fire during heavy animation; reuse the primed player and rewind.
+        player.currentTime = 0
+        player.play()
+    }
+
+    private func player(for sound: Sound) -> AVAudioPlayer? {
+        if let cached = players[sound] { return cached }
         guard let url = Bundle.main.url(forResource: sound.rawValue, withExtension: "wav") else {
-            return
+            Self.log.error("Missing sound resource: \(sound.rawValue, privacy: .public)")
+            return nil
         }
-        player = try? AVAudioPlayer(contentsOf: url)
-        player?.play()
+        guard let player = try? AVAudioPlayer(contentsOf: url) else { return nil }
+        player.prepareToPlay()
+        players[sound] = player
+        return player
     }
 }

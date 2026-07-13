@@ -21,6 +21,10 @@ final class SessionManager: ObservableObject {
     /// seconds under MINDFUL_SECONDS) — snapshotted at finish() so the break
     /// header doesn't drift while the user lingers on the break panel.
     private(set) var completedUnits: Int = 25
+    /// Actual wall-clock length of the just-finished session, in minutes,
+    /// snapshotted at finish() so the journal records the session — not the
+    /// time the user then spent lingering on the break panel.
+    private var completedWallMinutes: Int = 25
 
     /// Fired when the menu asks for the panel to be brought forward.
     let panelRequests = PassthroughSubject<Void, Never>()
@@ -28,6 +32,8 @@ final class SessionManager: ObservableObject {
     private var endDate: Date?
     private var sessionStart: Date?
     private var timer: Timer?
+    /// Auto-dismisses the break panel after a while (see startRestTimeout).
+    private var dismissTask: Task<Void, Never>?
 
     /// With MINDFUL_SECONDS=1 in the environment, the slider counts seconds
     /// instead of minutes — for trying the full cycle without waiting.
@@ -45,6 +51,8 @@ final class SessionManager: ObservableObject {
 
     func begin() {
         guard phase == .idle, !trimmedIntention.isEmpty else { return }
+        dismissTask?.cancel()
+        dismissTask = nil
         sessionStart = Date()
         endDate = Date().addingTimeInterval(minutes * secondsPerUnit)
         remaining = minutes * secondsPerUnit
@@ -52,9 +60,14 @@ final class SessionManager: ObservableObject {
         SoundPlayer.shared.play(.bowl)
 
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        let timer = Timer(timeInterval: 1, repeats: true) { _ in
             Task { @MainActor in SessionManager.shared.tick() }
         }
+        // Loose tolerance lets the OS coalesce the 1 Hz wakeups; .common mode
+        // keeps the countdown firing while the menu-bar menu is open.
+        timer.tolerance = 0.3
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     func endEarly() {
@@ -64,10 +77,12 @@ final class SessionManager: ObservableObject {
 
     func continueFromBreak() {
         guard phase == .resting else { return }
+        dismissTask?.cancel()
+        dismissTask = nil
         Journal.append(
             start: sessionStart ?? Date(),
             plannedMinutes: Int(minutes),
-            actualMinutes: actualMinutes,
+            actualMinutes: completedWallMinutes,
             intention: trimmedIntention,
             reflection: reflection.trimmingCharacters(in: .whitespacesAndNewlines)
         )
@@ -79,11 +94,6 @@ final class SessionManager: ObservableObject {
 
     func requestPanel() {
         panelRequests.send()
-    }
-
-    private var actualMinutes: Int {
-        guard let start = sessionStart else { return Int(minutes) }
-        return max(1, Int((Date().timeIntervalSince(start) / 60).rounded()))
     }
 
     private func tick() {
@@ -100,9 +110,25 @@ final class SessionManager: ObservableObject {
         remaining = 0
         if let start = sessionStart {
             completedUnits = max(1, Int((Date().timeIntervalSince(start) / secondsPerUnit).rounded()))
+            completedWallMinutes = max(1, Int((Date().timeIntervalSince(start) / 60).rounded()))
         }
         quote = Quotes.random()
         phase = .resting
         SoundPlayer.shared.play(.bowl)
+        startRestTimeout()
+    }
+
+    /// After the break has sat untouched for ten minutes, journal it as if the
+    /// user had clicked Continue and cycle back to the start panel.
+    private func startRestTimeout() {
+        dismissTask?.cancel()
+        let seconds = 10 * secondsPerUnit
+        dismissTask = Task { [weak self] in
+            // Task.sleep's continuous clock counts time the Mac spends asleep,
+            // so a break that outlasted a lock or sleep is already over on wake.
+            try? await Task.sleep(for: .seconds(seconds))
+            guard let self, !Task.isCancelled, self.phase == .resting else { return }
+            self.continueFromBreak()
+        }
     }
 }

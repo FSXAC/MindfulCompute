@@ -38,6 +38,14 @@
   breathing guide walks one box-breathing cycle. Click anywhere on it
   to skip ahead. With Reduce Motion on, it shows briefly without the
   pulsing ring.
+- **The break panel dismisses itself after 10 minutes.** If you walk
+  away, the session is journaled (with whatever reflection you had
+  typed, even nothing) and the start panel returns — same as clicking
+  **Continue**. Time the Mac spends asleep counts.
+- **Your history can't be silently lost.** If `sessions.json` is ever
+  unreadable (hand-edit gone wrong, disk hiccup), it is set aside as
+  `sessions.json.corrupt` and a fresh file starts — the old data is
+  preserved, never overwritten.
 - **Fast testing mode.** Launch with `MINDFUL_SECONDS=1` in the
   environment and the slider counts seconds instead of minutes. Add
   `MINDFUL_AUTOSTART="some intention"` to begin a session immediately
@@ -99,6 +107,10 @@ session lasts 5 seconds). Each line should hold true:
       bar where the leaf icon was.
 - [x] The menu shows your intention, the time remaining, and an
       "End session early" item.
+- [ ] Hold the menu open across a minute boundary: the countdown keeps
+      ticking (it used to freeze while the menu was open).
+- [ ] End the session early while the title card is still up: the card
+      fades out gently instead of vanishing in one frame.
 - [x] "End session early" jumps straight to the break panel (bowl included).
 - [x] Lock the screen mid-session, unlock: no panel appears, the
       countdown kept running.
@@ -123,6 +135,9 @@ session lasts 5 seconds). Each line should hold true:
       Settings → Accessibility → Motion → Reduce motion is on).
 - [x] After **Continue**, the start panel returns, with intention and
       reflection cleared.
+- [ ] Leave the break panel alone for 10 minutes (10 seconds under
+      `MINDFUL_SECONDS=1`): it journals the session and returns to the
+      start panel by itself.
 
 ### Data
 - [x] `journal.md` gained an entry with the date, duration, intention,
@@ -130,6 +145,8 @@ session lasts 5 seconds). Each line should hold true:
 - [x] `sessions.json` gained the same session as a JSON object.
 - [x] Ending early records the actual minutes with "(planned N)" noted in
       the journal.
+- [ ] Linger on the break panel for a while before **Continue**: the
+      journal records only the session's length, not the lingering.
 
 ### Unlock behavior
 - [x] With no session running, lock and unlock the Mac: the intention

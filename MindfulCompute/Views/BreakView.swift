@@ -14,7 +14,7 @@ struct BreakView: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 14) {
-                BreathingGlyph()
+                BreathingGlyph(active: manager.phase == .resting)
                 VStack(spacing: 10) {
                     Text(eyebrow)
                         .font(.system(size: 11, weight: .semibold))
@@ -80,8 +80,12 @@ struct BreakView: View {
     }
 }
 
-/// A small dot that swells and settles at a slow breathing pace.
+/// A small dot that swells and settles at a slow breathing pace, breathing
+/// only while `active` — BreakView is pre-mounted into the hidden panel long
+/// before the break, so the pulse must stay dormant until the page is shown.
 struct BreathingGlyph: View {
+    /// True only while the break page is actually on screen (phase .resting).
+    let active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var inhale = false
 
@@ -91,13 +95,25 @@ struct BreathingGlyph: View {
             .frame(width: 14, height: 14)
             .scaleEffect(inhale ? 1.3 : 0.8)
             .opacity(inhale ? 0.95 : 0.55)
-            .shadow(color: .ember.opacity(0.5), radius: inhale ? 10 : 4)
+            // Fixed-radius glow: the breath reads through scale + opacity, so
+            // the blur is composed once instead of re-rendered every frame.
+            .shadow(color: .ember.opacity(0.5), radius: 7)
             .frame(height: 24)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
-                    inhale = true
-                }
+            .onAppear { setBreathing(active) }
+            .onChange(of: active) { _, isActive in setBreathing(isActive) }
+    }
+
+    private func setBreathing(_ on: Bool) {
+        guard !reduceMotion else { return }
+        if on {
+            withAnimation(.easeInOut(duration: 4).repeatForever(autoreverses: true)) {
+                inhale = true
             }
+        } else {
+            // A repeatForever animation keeps its display link ticking until the
+            // property is re-driven by a NON-repeating animation — clearing the
+            // flag alone won't stop it. Settle out to halt the display link.
+            withAnimation(.easeInOut(duration: 0.3)) { inhale = false }
+        }
     }
 }
