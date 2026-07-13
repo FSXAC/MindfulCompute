@@ -1,4 +1,14 @@
-# MindfulCompute
+<p align="center">
+  <img src="docs/icon-256.png" width="128" height="128" alt="MindfulCompute icon">
+</p>
+
+<h1 align="center">MindfulCompute</h1>
+
+<p align="center">
+  <a href="https://github.com/FSXAC/MindfulCompute/releases/latest">
+    <img src="https://img.shields.io/github/v/release/FSXAC/MindfulCompute" alt="Latest release">
+  </a>
+</p>
 
 A small macOS menu-bar app for intentional computer use. Before you start
 working, a floating panel asks what you're here to do and for how long
@@ -6,6 +16,26 @@ working, a floating panel asks what you're here to do and for how long
 counts down in the menu bar. When time is up, a gong sounds and a break
 panel invites you to step away — with a quote and a one-line reflection
 that's saved to a journal.
+
+## Download
+
+Grab the latest **MindfulCompute.dmg** from the
+[Releases page](https://github.com/FSXAC/MindfulCompute/releases/latest),
+open it, and drag the app onto **Applications**. On first launch,
+right-click the app → **Open** → **Open** (it's free / ad-hoc signed, so
+macOS asks once). If it reports "damaged," run:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/MindfulCompute.app
+```
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/intention.png" width="420" alt="The intention panel: 'What are you here to do?' with a task field and a 5-minute-to-1-hour duration slider">
+  <br>
+  <em>The intention panel — set a task and a duration before you begin.</em>
+</p>
 
 ## How it behaves
 
