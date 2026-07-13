@@ -1,0 +1,6 @@
+- Make dim even darker
+- Make dim blur the background frosted/liquid glass
+- When entering the intention, the user has an option to also enter what the user needs/wants to do after the current computer use session; in particular: enter interntion -[tap tab]-> shows additional hidden text box to enter more text. enter still begins the session like normal. When session ends, display what the user needs to do as a title card similar to start.
+  - This would likely require us to rethink how the end-session logic works. Currently when a session ends, we just display the end session display screen, but if there is another title card, it might be too much
+
+ 
