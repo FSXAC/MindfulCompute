@@ -400,10 +400,13 @@ a first-class risk during agent-driven development, not an afterthought:
   onward: Esc (`OverlayWindow`'s `WM_KEYDOWN`/`VK_ESCAPE` case, and
   `TextField`'s Esc forwarding from the field host up to the overlay), the
   tray's Quit menu item, and a watchdog timer
-  (`MINDFUL_SPIKE_AUTOEXIT`, default 120s, armed in `main.cpp`:
-  `SetTimer(overlay.hwnd(), TIMER_WATCHDOG, autoexit*1000, ...)`) that
-  force-quits the process if nothing else does. Three independent exits so
-  a broken build in any one of them still can't strand the session.
+  (`MINDFUL_SPIKE_AUTOEXIT`, armed **only when that env var is explicitly
+  set** — `SetTimer(overlay.hwnd(), TIMER_WATCHDOG, autoexit*1000, ...)` in
+  `main.cpp`; see First user-testing round, below, for why an unconditional
+  default was a footgun) that force-quits the process if nothing else does.
+  The agent testing protocol mandates setting the env var on every
+  live/automated run. Three independent exits so a broken build in any one
+  of them still can't strand the session.
 - **Input injection**: agents drive the overlay via `PostMessage`/`WM_CHAR`
   against the specific HWNDs the app logs at startup — `FindWindow`-by-title
   is unreliable in an automation/harness context because the target window
@@ -431,6 +434,170 @@ a first-class risk during agent-driven development, not an afterthought:
   (`Log::write(L"... EXSTYLE=0x%08llX", ...)`) so a style that silently
   didn't take (Windows will sometimes strip or refuse combinations) shows up
   in the log instead of only being discovered visually.
+
+## First user-testing round (2026-07-15)
+
+Four real bugs came out of the first round of testing on the actual target
+laptop; three debug agents fixed them (`772abbd`, `9481672`, `b01ef07`,
+`17c6430`). The shape of the bugs is worth keeping around as a lesson, not
+just the fixes.
+
+### Watchdog footgun: a "crash" that was actually a graceful self-quit
+
+The Phase 0 watchdog (`MINDFUL_SPIKE_AUTOEXIT`, see Testing an overlay app
+with agents, above) defaulted to 120s and armed **unconditionally** in every
+build, including the resident production one — a leftover from the
+spike-testing safety net that was never actually gated behind the env var it
+was named after. The result: the app quietly `PostQuitMessage`'d itself two
+minutes into any real session, which a user testing it reported as "the app
+crashed while I was typing my reflection." It wasn't a crash — exit code 0,
+clean shutdown, and (this is the tell) **no WER Event 1000** in the Event
+Log, because Windows Error Reporting only logs unhandled-exception/fault
+exits, not graceful ones. **Lesson for future debugging here: if a user
+reports a "crash" and there's no WER Event 1000 for it, stop looking for a
+fault and start looking for a self-quit path** (a watchdog, an idle timer,
+an explicit `PostQuitMessage`) — the absence of the usual crash signature is
+itself the diagnostic signal.
+
+Fixed in `17c6430`: `autoexit` now defaults to `0` (disabled) in
+`windows/src/main.cpp`, and `TIMER_WATCHDOG` is only armed when
+`MINDFUL_SPIKE_AUTOEXIT` is explicitly set and in range. Production now runs
+indefinitely; the agent testing protocol still mandates setting the env var
+on every live run — the safety net didn't go away, it just stopped being on
+by default for humans.
+
+### Reduced-motion effect gap: correct-by-design, but hit far more often on Windows
+
+The Mac `accessibilityReduceMotion` → Windows `SPI_GETCLIENTAREAANIMATION`
+mapping (see What's intentionally NOT ported, below) is mechanically
+faithful — same static-vs-animated branch, same trigger. But the Windows
+"Animation effects" toggle (Settings > Accessibility > Visual effects) is
+off far more often in practice than the Mac equivalent is on: performance
+presets, RDP sessions, VMs, and — as it turned out — the dev desktop itself
+all commonly have it off. So Windows users hit the static breathing guide at
+a much higher rate than Mac users hit reduced-motion, even though both
+platforms are equally "correct." It reads as a broken animation, not an
+accessibility feature, unless it's diagnosable.
+
+Fixed in `772abbd`: `OverlayWindow::create` (`windows/src/OverlayWindow.cpp`)
+now logs a dedicated startup line spelling out the raw
+`SPI_GETCLIENTAREAANIMATION` value, whether `MINDFUL_FORCE_MOTION` overrode
+it, the effective `reduceMotion_`, and the consequence in plain words
+("breathing guide STATIC by design" vs "animated") — also mirrored to
+`OutputDebugStringW` so a "why won't it animate?" report is answerable via
+DebugView without hunting down the log file. `MINDFUL_FORCE_MOTION=1`/`=0`
+still forces either path regardless of the system setting, in every build
+config.
+
+### Dev vs release both compile /O2 + NDEBUG
+
+Worth writing down explicitly since it kept coming up while triaging the
+above: `windows/build.cmd`'s dev build is `RelWithDebInfo`, release is
+`Release`, but both are optimized (`/O2`) with `NDEBUG` defined. There is no
+debug-vs-release codegen split here the way there is on many C++ projects —
+so "works in dev, not in release" is a red flag pointing at something
+*environmental* (a system setting, timing, a machine-specific state), not at
+optimizer behavior, and specifically rules out the classic
+debug-CRT-zeroes-uninitialized-memory class of bug (dev and release allocate
+memory identically here).
+
+### Field host buried by overlay activation
+
+The floating EDIT host (see The workaround: a floating opaque top-level
+host, above) shares the overlay's `WS_EX_TOPMOST` band. Any real click on
+the overlay activates it, which raises it above the host — so clicking into
+the field area a second time landed on the overlay (whose `WM_LBUTTONDOWN`
+ignored panel-interior clicks) instead of the buried EDIT, and the caret
+never came back. Fixed in `b01ef07`: `OverlayWindow::handle`'s
+`WM_LBUTTONDOWN` case now forwards a click inside `fieldRect_`/`reflectRect_`
+to the corresponding `TextField::showAndFocus()`, which re-raises the host
+and refocuses the EDIT — same as clicking the field on macOS. This only
+fires on an actual click; the host still shows without stealing focus on
+panel entry, per the original design.
+
+### CreateRoundRectRgn wants physical pixels, not DIPs
+
+`TextField::create`/`setScreenRect` (`windows/src/TextField.cpp`) call
+`CreateRoundRectRgn(0, 0, w+1, h+1, rx, ry)` to round the host's corners —
+`rx`/`ry` are the corner-ellipse **diameter** (`2 × radius`), and the whole
+call operates in the host's native **physical** pixels, since the host is a
+physical-pixel top-level window (see Styling is old-school GDI, not D2D,
+above). It had been hardcoded to `12`, i.e. a fixed 6px radius, which never
+scaled with DPI and drifted out of sync with the D2D chrome's
+`kFieldRadius = 11` DIP (16.5px at 150%) — tight, mismatched corners that
+made the border look cut off. Fixed in `b01ef07`: the host's radius now
+tracks `kFieldRadius * scale_` in physical px
+(`OverlayWindow::positionField` calls `f.setCornerRadiusPx(...)` on every
+layout pass), and both fields render through one
+`OverlayWindow::drawFieldChrome()` helper — a fill-only rounded rect (the
+Windows equivalent of macOS's `.quinary` fill) plus, when focused, an accent
+ring (sage on start, ember on break) drawn one DIP *outside* the host so it
+clears the opaque rectangle and wraps the rounded corners fully. The break
+field's old always-on white border (there's no macOS equivalent — both
+fields are fill-only, unfocused) was dropped in the same pass.
+
+### DPI gotcha for test harnesses
+
+A DPI-**unaware** driver process posting cross-process positional messages
+(`WM_LBUTTONDOWN` with packed `x,y` in `lParam`) gets its coordinates
+silently virtualized by the *target* window's per-monitor DPI — a
+client-space `1920` arrived at the app as `2880` at 150% scaling, because an
+unaware caller is treated as if it's on a 96-DPI virtual desktop and Windows
+scales the point for it. Fix on the harness side: make the driver
+process-DPI-aware (`PER_MONITOR_AWARE_V2`, matching `windows/app.manifest`),
+or precompute and post DIP-space coordinates instead of raw client pixels.
+`WM_CHAR` and other non-positional messages are unaffected — this only bites
+message types carrying a screen/client coordinate pair.
+
+### Logging and crash system (new, `9481672`)
+
+The field crash (typing in the reflection field, during this same round)
+left zero diagnostics — no log, no dump, nothing — which is what motivated
+all of this:
+
+- **Logging** (`windows/src/Log.h`/`.cpp`): replaced the header-only spike
+  logger with a persistent, buffered one. One timestamped file per run under
+  `%APPDATA%\MindfulCompute\logs\`, pruned to the 5 most recent runs on
+  startup. INFO by default; `MINDFUL_LOG_VERBOSE=1` adds DEBUG. `Log::write`
+  kept its exact name/signature so no call site changed. Buffered, flushed
+  only on important events (phase transitions, journal writes, startup, and
+  always by the crash handler) — idle does zero log I/O, preserving the ~0%
+  idle-CPU requirement. `MINDFUL_SPIKE_LOG` still overrides the path for the
+  automation harness, unchanged.
+- **Crash capture** (`windows/src/CrashDump.h`/`.cpp`):
+  `SetUnhandledExceptionFilter` plus `abort`/`_purecall`/invalid-parameter
+  handlers all funnel into one place that logs the fault code, address, and
+  module+offset, writes a minidump (`.dmp`) beside the run log, flushes,
+  then lets the process die. `dbghelp.dll` is `LoadLibrary`'d only at crash
+  time — the happy path carries no dependency on it. The CRT fatal paths
+  (`abort`, `_purecall`, invalid-parameter) don't hand you an
+  `EXCEPTION_POINTERS`, so the handler synthesizes a context via
+  `RtlCaptureContext` + `_ReturnAddress()` and guards against re-entrant
+  faults while doing it. The handler **must** flush before the process dies
+  — `TerminateProcess` (effectively how these paths end) does not flush CRT
+  stdio buffers, so an unflushed final log line is silently lost.
+- **Verification hook**: `MINDFUL_TEST_CRASH=1` arms a timer that
+  null-derefs ~2s after startup, to exercise the whole path (log line →
+  flush → dump → die) end-to-end on demand rather than waiting for a real
+  crash to test it.
+- **Symbolication**: Release now compiles `/Zi` and links `/DEBUG`,
+  re-asserting `/OPT:REF /OPT:ICF` (which `/DEBUG` silently disables on its
+  own) so the shipped exe stays byte-identical in size; the `.pdb` is a
+  separate artifact `build.cmd` copies into `dist/` and is never bundled
+  into or required by the exe itself. To symbolize a dump brought back from
+  the laptop: `cdb -z run-*.dmp -y <pdb dir> -i <exe dir>` then `.ecxr`
+  (jump to the exception context) and `k` (stack trace).
+- Tray gained an "Open logs folder" item (`ShellExecuteW` on `Log::dir()`).
+
+### PowerShell + a GUI-subsystem exe
+
+Launching `MindfulCompute.exe` from PowerShell with `&` returns immediately
+— it's a GUI-subsystem process, so the shell doesn't wait on it the way it
+would a console app. Any test/automation script needs an explicit
+`Wait-Process` (or equivalent) rather than assuming the launch line blocks.
+Related: `MINDFUL_SPIKE_LOG`'s file stays open/locked by the app for the
+whole run, so a harness reading it mid-run can hit sharing violations — read
+it after the process exits, not while polling it live.
 
 ## What's intentionally NOT ported / accepted as different
 

@@ -43,6 +43,14 @@ lasts 25 seconds.
 - [ ] **Open journal** opens `journal.md` in your default editor, and it contains
       the sessions you ran.
 
+## Logs & crash diagnostics
+- [ ] Tray menu → **Open logs folder** opens `%APPDATA%\MindfulCompute\logs\`
+      with a `run-*.log` for this session (5 most recent runs kept).
+- [ ] After any crash (or `set MINDFUL_TEST_CRASH=1` before launch to force
+      one), the logs folder gains a `run-*.dmp` minidump and the matching
+      `run-*.log` ends with a final `[crash]` line (fault code + address +
+      module offset) — not a silent cutoff.
+
 ## Autostart across a reboot
 - [ ] Toggle **Start at login** on. Reboot the laptop. After signing in, the app
       is already running (leaf in the tray) — and if you lock/unlock, the panel
@@ -54,6 +62,14 @@ lasts 25 seconds.
       still ring if Reduce Motion is on) → work for 25 min → bowl + break panel
       with a quote → type a reflection → **Continue**. The journal gains an entry
       with the date, "25 min", the intention, and your reflection.
+
+## Reduced motion
+- [ ] With Windows Settings > Accessibility > Visual effects > **Animation
+      effects** ON, the title-card breathing guide animates (swells/holds/
+      recedes over the 4/4/4 box-breath). With it OFF, the guide is static
+      ("Take a slow breath") — that's correct reduced-motion parity with
+      macOS, not a bug. `set MINDFUL_FORCE_MOTION=1` before launch forces the
+      animated guide regardless of the system setting, for spot-checking.
 
 ## Multi-monitor (if you have a second display)
 - [ ] The panel/title-card/break appear on the monitor with your cursor; every

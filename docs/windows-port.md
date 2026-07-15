@@ -116,6 +116,16 @@ one "smart" window carrying the UI; every other monitor gets a plain dimmer.
     handling — geometry and fonts scale by each monitor's effective DPI, and
     `WM_DPICHANGED` now repositions/rescales the overlay, composition target,
     layout, and field host before rebuilding the dimmers.
+- **Logging & crash diagnostics (added post-Phase 2, after the first
+  user-testing round).** Always-on buffered file logging under
+  `%APPDATA%\MindfulCompute\logs\` (5 most recent runs kept, INFO by
+  default, `MINDFUL_LOG_VERBOSE=1` adds DEBUG). `SetUnhandledExceptionFilter`
+  plus the CRT fatal-path handlers (`abort`/`_purecall`/invalid-parameter)
+  catch every crash, write a minidump beside the run log, and flush before
+  the process dies. The Phase 0 test watchdog (`MINDFUL_SPIKE_AUTOEXIT`) now
+  arms only when that env var is explicitly set — production runs
+  indefinitely; the agent testing protocol still sets it on every live run.
+  Full detail in `windows-learnings.md`.
 - **All animation/color/spacing/timing constants live in ONE header** (e.g.
   `Theme.h`) so tuning passes are cheap. Animations are immediate-mode: a
   frame timer (target 60 fps only while animating, 0 fps when idle — this is

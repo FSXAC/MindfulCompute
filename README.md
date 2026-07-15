@@ -105,6 +105,14 @@ the unsigned exe — click **More info** → **Run anyway**.
 - Windows 11 parks newly added tray icons in the hidden overflow flyout —
   drag the leaf onto the taskbar the first time to keep the countdown
   visible.
+- Logs live at `%APPDATA%\MindfulCompute\logs` (tray menu → **Open logs
+  folder**; the 5 most recent runs are kept). A crash drops a `.dmp`
+  minidump there alongside the run log — zip the whole folder when filing a
+  bug report.
+- If the title-card breathing guide is static instead of animating, check
+  Windows Settings > Accessibility > Visual effects > **Animation effects**
+  — off is intentional reduced-motion parity with macOS, not a bug. Turn it
+  on, or set `MINDFUL_FORCE_MOTION=1`, to animate.
 
 See [windows/CHECKLIST.md](windows/CHECKLIST.md) for the manual test
 checklist, [docs/windows-port.md](docs/windows-port.md) for the design
