@@ -10,12 +10,13 @@
   </a>
 </p>
 
-A small macOS menu-bar app for intentional computer use. Before you start
-working, a floating panel asks what you're here to do and for how long
-(5 minutes to an hour). A Tibetan bowl marks the start; the remaining time
-counts down in the menu bar. When time is up, a gong sounds and a break
-panel invites you to step away — with a quote and a one-line reflection
-that's saved to a journal.
+A small macOS menu-bar app for intentional computer use, with a native
+Windows port (tray icon instead of menu bar — see [Windows](#windows) below).
+Before you start working, a floating panel asks what you're here to do and
+for how long (5 minutes to an hour). A Tibetan bowl marks the start; the
+remaining time counts down in the menu bar. When time is up, a gong sounds
+and a break panel invites you to step away — with a quote and a one-line
+reflection that's saved to a journal.
 
 ## Download
 
@@ -75,6 +76,40 @@ easy to spot. The app lands in
 `build/Build/Products/Release/MindfulCompute.app`; keep the installed
 copy in `/Applications` so the "Start at login" toggle registers a
 stable path.
+
+## Windows
+
+A native Win32 + Direct2D port (C++20) lives in `windows/`, with feature
+parity with the Mac app plus multi-monitor dimming (every monitor besides
+the one showing the panel just dims).
+
+Requires the VS 2022 Build Tools (C++ workload), CMake, and Ninja:
+
+```sh
+windows\build.cmd            # dev build (RelWithDebInfo) in windows\build
+windows\build.cmd release    # optimized build -> windows\dist\MindfulCompute.exe
+```
+
+The release build is a single portable exe (~2.8 MB, bowl sound embedded as
+a resource — nothing else to ship). On first launch, SmartScreen warns about
+the unsigned exe — click **More info** → **Run anyway**.
+
+- Data lives in `%APPDATA%\MindfulCompute\journal.md` and `sessions.json` —
+  same formats as the Mac app.
+- `MINDFUL_SECONDS=1` works the same as on macOS (the duration slider counts
+  seconds instead of minutes); `MINDFUL_AUTOSTART="some intention"` begins a
+  session immediately on launch.
+- "Start at login" is a toggle in the tray menu (it writes the
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` key) — the tray
+  equivalent of the Mac's menu-bar toggle.
+- Windows 11 parks newly added tray icons in the hidden overflow flyout —
+  drag the leaf onto the taskbar the first time to keep the countdown
+  visible.
+
+See [windows/CHECKLIST.md](windows/CHECKLIST.md) for the manual test
+checklist, [docs/windows-port.md](docs/windows-port.md) for the design
+brief, and [docs/windows-learnings.md](docs/windows-learnings.md) for
+engineering notes from the port.
 
 ## Testing the flow quickly
 
