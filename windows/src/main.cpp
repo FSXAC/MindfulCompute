@@ -22,6 +22,7 @@
 #include "Journal.h"
 #include "LoginItem.h"
 #include "Log.h"
+#include "CrashDump.h"
 #include "resource.h"
 
 namespace {
@@ -32,29 +33,65 @@ constexpr UINT IDM_END_EARLY      = 0xE003;
 constexpr UINT IDM_OPEN_JOURNAL   = 0xE004;
 constexpr UINT IDM_AUTOSTART      = 0xE005;
 constexpr UINT IDM_VERSION        = 0xE006;
+constexpr UINT IDM_OPEN_LOGS      = 0xE007;
 constexpr UINT_PTR TIMER_WATCHDOG  = 1;
 constexpr UINT_PTR TIMER_COUNTDOWN = 2;
+constexpr UINT_PTR TIMER_TESTCRASH = 99;   // MINDFUL_TEST_CRASH hook (see below)
 
-std::wstring exeDir() {
-    wchar_t buf[MAX_PATH];
-    GetModuleFileNameW(nullptr, buf, MAX_PATH);
-    std::wstring p(buf);
-    size_t slash = p.find_last_of(L"\\/");
-    return (slash == std::wstring::npos) ? L"." : p.substr(0, slash);
-}
 std::wstring envStr(const wchar_t* name) {
     wchar_t buf[512];
     DWORD n = GetEnvironmentVariableW(name, buf, 512);
     return (n > 0 && n < 512) ? std::wstring(buf, n) : std::wstring();
 }
+
+// One-shot startup snapshot at INFO: OS build, reduced-motion, and the full
+// monitor layout with per-monitor effective DPI -- the context most bug reports
+// need and none of them include.
+void logEnvironment() {
+    typedef LONG(WINAPI * RtlGetVersion_t)(PRTL_OSVERSIONINFOW);
+    RTL_OSVERSIONINFOW vi{}; vi.dwOSVersionInfoSize = sizeof(vi);
+    if (HMODULE nt = GetModuleHandleW(L"ntdll.dll")) {
+        if (auto rgv = (RtlGetVersion_t)GetProcAddress(nt, "RtlGetVersion"))
+            if (rgv(&vi) == 0)
+                Log::write(L"[env] Windows %lu.%lu build %lu",
+                           vi.dwMajorVersion, vi.dwMinorVersion, vi.dwBuildNumber);
+    }
+
+    BOOL anim = TRUE;
+    SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &anim, 0);
+    Log::write(L"[env] client-area animation=%ls -> reduceMotion=%ls",
+               anim ? L"ON" : L"OFF", anim ? L"no" : L"yes");
+
+    int count = 0;
+    EnumDisplayMonitors(nullptr, nullptr,
+        [](HMONITOR mon, HDC, LPRECT, LPARAM lp) -> BOOL {
+            int& n = *reinterpret_cast<int*>(lp);
+            MONITORINFOEXW mi{}; mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(mon, &mi);
+            UINT dx = 96, dy = 96;
+            GetDpiForMonitor(mon, MDT_EFFECTIVE_DPI, &dx, &dy);
+            Log::write(L"[env] monitor %d %ls bounds=(%ld,%ld %ldx%ld) work=(%ld,%ld %ldx%ld) dpi=%u (%d%%)",
+                       n, (mi.dwFlags & MONITORINFOF_PRIMARY) ? L"[primary]" : L"        ",
+                       mi.rcMonitor.left, mi.rcMonitor.top,
+                       mi.rcMonitor.right - mi.rcMonitor.left,
+                       mi.rcMonitor.bottom - mi.rcMonitor.top,
+                       mi.rcWork.left, mi.rcWork.top,
+                       mi.rcWork.right - mi.rcWork.left,
+                       mi.rcWork.bottom - mi.rcWork.top,
+                       dx, MulDiv(dx, 100, 96));
+            ++n;
+            return TRUE;
+        }, reinterpret_cast<LPARAM>(&count));
+    Log::write(L"[env] %d monitor(s) enumerated", count);
+}
 } // namespace
 
 int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
-    std::wstring logPath = envStr(L"MINDFUL_SPIKE_LOG");
-    if (logPath.empty()) logPath = exeDir() + L"\\spike.log";
-    Log::init(logPath);
-    Log::write(L"[main] MindfulCompute %ls (built %ls)  Phase 2 platform wiring",
+    Log::init();
+    CrashDump::install();   // catch crashes from here on -> minidump + final log line
+    Log::write(L"[main] MindfulCompute %ls (built %ls)",
                L"" MINDFUL_VERSION, L"" MINDFUL_BUILD_STAMP);
+    logEnvironment();       // OS build + monitor layout + reduced-motion, at INFO
 
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     INITCOMMONCONTROLSEX icc{ sizeof(icc), ICC_STANDARD_CLASSES };
@@ -126,6 +163,14 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
         case IDM_PANEL:        overlay.bringToFront(); break;
         case IDM_END_EARLY:    Log::write(L"[main] tray End session early"); page.endEarly(); break;
         case IDM_OPEN_JOURNAL: Journal::open(); break;
+        case IDM_OPEN_LOGS: {
+            const std::wstring& d = Log::dir();
+            if (!d.empty()) {
+                ShellExecuteW(nullptr, L"open", d.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+                Log::write(L"[main] tray Open logs folder -> %ls", d.c_str());
+            }
+            break;
+        }
         case IDM_AUTOSTART: {
             bool en = LoginItem::isEnabled();
             LoginItem::setEnabled(!en);
@@ -147,6 +192,15 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     overlay.onTimer = [&](UINT_PTR id) {
         if (id == TIMER_WATCHDOG) { Log::write(L"[main] watchdog fired -> exit"); PostQuitMessage(0); }
         else if (id == TIMER_COUNTDOWN) { updateTray(); }
+        else if (id == TIMER_TESTCRASH) {
+            // MINDFUL_TEST_CRASH diagnostics hook: deliberately fault once the app
+            // is fully up and the message loop is pumping, to exercise the crash
+            // handler end-to-end (minidump + final log line). Null deref -> AV.
+            KillTimer(overlay.hwnd(), TIMER_TESTCRASH);
+            Log::write(L"[main] MINDFUL_TEST_CRASH firing -> null dereference");
+            Log::flush();
+            *reinterpret_cast<volatile int*>(0) = 0xDEAD;
+        }
     };
 
     dims.onClick = [&]() { overlay.pulse(); };
@@ -173,6 +227,7 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
         }
         AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(m, MF_STRING, IDM_OPEN_JOURNAL, L"Open journal");
+        AppendMenuW(m, MF_STRING, IDM_OPEN_LOGS, L"Open logs folder");
         UINT af = MF_STRING | (LoginItem::isEnabled() ? MF_CHECKED : MF_UNCHECKED);
         AppendMenuW(m, af, IDM_AUTOSTART, L"Start at login");
         AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
@@ -203,7 +258,15 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     if (page.phase() == Phase::Running)
         SetTimer(overlay.hwnd(), TIMER_COUNTDOWN, 1000, nullptr);
 
-    Log::write(L"[main] Phase 1 running; message loop entered");
+    // Diagnostics hook: MINDFUL_TEST_CRASH=1 faults ~2s after the loop starts, to
+    // verify the crash handler produces a .dmp + final log line on a live build.
+    if (!envStr(L"MINDFUL_TEST_CRASH").empty()) {
+        Log::write(L"[main] MINDFUL_TEST_CRASH armed -> crash in ~2s");
+        SetTimer(overlay.hwnd(), TIMER_TESTCRASH, 2000, nullptr);
+    }
+
+    Log::write(L"[main] startup complete; message loop entered");
+    Log::flush();               // startup breadcrumb on disk before we go interactive
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
@@ -217,5 +280,6 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     dims.teardown();
     CoUninitialize();
     Log::write(L"[main] clean exit");
+    Log::flush();
     return 0;
 }

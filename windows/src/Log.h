@@ -1,51 +1,40 @@
 #pragma once
-// Minimal append-only diagnostics log for the Phase 0 spike.
-// Phase 1+ can keep this for a debug channel or delete it; it is intentionally
-// dependency-free and single-threaded (all callers are on the UI thread).
-#include <windows.h>
+// Always-on lightweight diagnostics log.
+//
+// Production logging for the Windows port: one timestamped file per run under
+// %APPDATA%\MindfulCompute\logs\, pruned to the most recent handful of runs on
+// startup. INFO by default; MINDFUL_LOG_VERBOSE=1 adds DEBUG lines. The file is
+// buffered and only flushed on important events (and always by the crash
+// handler, see CrashDump.h), so idle/steady CPU stays ~0 -- there is no logging
+// at all while the app sits idle.
+//
+// The historical automation channel is preserved: MINDFUL_SPIKE_LOG=<path>
+// overrides the destination with an exact file path (the agent harness relies
+// on this). Log::write keeps its original name and signature so every existing
+// call site is unchanged; it emits at INFO level.
 #include <string>
-#include <cstdio>
-#include <cstdarg>
-#include <mutex>
 
 namespace Log {
 
-inline std::wstring& path() {
-    static std::wstring p;
-    return p;
-}
-inline std::mutex& mtx() {
-    static std::mutex m;
-    return m;
-}
+// Set up file logging (call once at startup, before anything else logs).
+void init();
 
-inline void init(const std::wstring& file) {
-    path() = file;
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, file.c_str(), L"w, ccs=UTF-8") == 0 && f) {
-        SYSTEMTIME st; GetLocalTime(&st);
-        fwprintf(f, L"=== MindfulCompute Windows spike log  %04d-%02d-%02d %02d:%02d:%02d ===\n",
-                 st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-        fclose(f);
-    }
-}
+// INFO-level line (printf-style, wide). Original name kept for compatibility.
+void write(const wchar_t* fmt, ...);
 
-inline void write(const wchar_t* fmt, ...) {
-    wchar_t buf[2048];
-    va_list ap; va_start(ap, fmt);
-    _vsnwprintf_s(buf, _countof(buf), _TRUNCATE, fmt, ap);
-    va_end(ap);
+// DEBUG-level line: only emitted when MINDFUL_LOG_VERBOSE=1.
+void debug(const wchar_t* fmt, ...);
 
-    std::lock_guard<std::mutex> lock(mtx());
-    SYSTEMTIME st; GetLocalTime(&st);
-    FILE* f = nullptr;
-    if (!path().empty() && _wfopen_s(&f, path().c_str(), L"a, ccs=UTF-8") == 0 && f) {
-        fwprintf(f, L"[%02d:%02d:%02d.%03d] %ls\n",
-                 st.wHour, st.wMinute, st.wSecond, st.wMilliseconds, buf);
-        fclose(f);
-    }
-    OutputDebugStringW(buf);
-    OutputDebugStringW(L"\n");
-}
+// Force buffered output to disk now. Cheap; called on phase/journal events and,
+// always, from the crash handler before the process dies.
+void flush();
+
+// Directory holding the run logs (for the tray "Open Logs Folder" item). Empty
+// only if %APPDATA% could not be resolved.
+const std::wstring& dir();
+
+// Full path of this run's log file (the crash handler sits the .dmp beside it
+// with the same timestamped stem). Empty only if no log file could be opened.
+const std::wstring& file();
 
 } // namespace Log

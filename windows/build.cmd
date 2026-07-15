@@ -25,5 +25,12 @@ if /I "%~1"=="release" (
     copy /y "%BUILD_DIR%\MindfulCompute.exe" "dist\MindfulCompute.exe" >nul || exit /b 1
     echo DIST: dist\MindfulCompute.exe
     for %%F in ("dist\MindfulCompute.exe") do echo SIZE: %%~zF bytes
+    REM Ship the .pdb next to the exe in dist so crash dumps from the laptop can
+    REM be symbolized here. The pdb is NOT the exe -- copying it does not change
+    REM the portable single-file exe; the user only takes the exe to the laptop.
+    if exist "%BUILD_DIR%\MindfulCompute.pdb" (
+        copy /y "%BUILD_DIR%\MindfulCompute.pdb" "dist\MindfulCompute.pdb" >nul
+        echo PDB: dist\MindfulCompute.pdb
+    )
 )
 echo BUILD_OK

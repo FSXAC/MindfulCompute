@@ -345,6 +345,8 @@ void Journal::append(const FILETIME& startUtc, int plannedMinutes, int actualMin
         Log::write(L"[journal] no %%APPDATA%% base dir; skipping append");
         return;
     }
+    Log::write(L"[journal] append -> %ls (%d min, planned %d)",
+               journalPath().c_str(), actualMinutes, plannedMinutes);
 
     // JSON side first (mirrors Swift order: appendRecord before the md write).
     Record rec;
@@ -379,6 +381,7 @@ void Journal::append(const FILETIME& startUtc, int plannedMinutes, int actualMin
     else
         Log::write(L"[journal] journal.md appended (%d min%ls)", actualMinutes,
                    reflection.empty() ? L"" : L", reflection");
+    Log::flush();   // a completed journal write is an important, disk-worthy event
 }
 
 void Journal::open() {

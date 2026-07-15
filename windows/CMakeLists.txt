@@ -35,6 +35,8 @@ add_executable(MindfulCompute WIN32
     src/Journal.cpp
     src/Sound.cpp
     src/LoginItem.cpp
+    src/Log.cpp
+    src/CrashDump.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/resources.rc   # icon + bowl wav, embedded
     app.manifest   # CMake feeds this to mt.exe -> embedded (per-monitor-v2 DPI)
 )
@@ -52,6 +54,17 @@ target_compile_definitions(MindfulCompute PRIVATE
 )
 
 target_compile_options(MindfulCompute PRIVATE /W4 /permissive- /utf-8 /EHsc)
+
+# ---- Symbolication for the optimized Release build ----
+# RelWithDebInfo (the dev build) already carries /Zi + /DEBUG. Give the optimized
+# Release the same so a crash dump from the laptop can be symbolized back here
+# against MindfulCompute.pdb -- WITHOUT changing the shipped exe: /DEBUG only adds
+# a tiny debug-directory entry pointing at the (separate) .pdb, and we re-assert
+# /OPT:REF,ICF (which /DEBUG otherwise turns off) so the exe stays byte-for-byte
+# the same size it was. The .pdb never ships unless the user copies it.
+target_compile_options(MindfulCompute PRIVATE $<$<CONFIG:Release>:/Zi>)
+target_link_options(MindfulCompute PRIVATE
+    $<$<CONFIG:Release>:/DEBUG;/OPT:REF;/OPT:ICF>)
 
 target_link_libraries(MindfulCompute PRIVATE
     d2d1

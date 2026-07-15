@@ -28,6 +28,14 @@ int envInt(const wchar_t* name, int fallback) {
     int v = _wtoi(buf);
     return v > 0 ? v : fallback;
 }
+const wchar_t* phaseName(Phase p) {
+    switch (p) {
+    case Phase::Idle:    return L"Idle";
+    case Phase::Running: return L"Running";
+    case Phase::Resting: return L"Resting";
+    }
+    return L"?";
+}
 } // namespace
 
 PageController::PageController() {
@@ -68,8 +76,12 @@ int PageController::remainingSeconds() const {
 
 void PageController::setPhase(Phase p) {
     if (phase_ == p) return;
+    Phase prev = phase_;
     phase_ = p;
-    Log::write(L"[session] phase -> %d", static_cast<int>(p));
+    // Sessions have no pause state by design (the countdown is wall-clock
+    // anchored) -- the lifecycle is just these three transitions.
+    Log::write(L"[session] phase %ls -> %ls", phaseName(prev), phaseName(p));
+    Log::flush();   // lifecycle transitions are important events: land them on disk
     if (onPhaseChanged) onPhaseChanged(p);
 }
 
