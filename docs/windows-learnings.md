@@ -437,8 +437,8 @@ a first-class risk during agent-driven development, not an afterthought:
 
 ## First user-testing round (2026-07-15)
 
-Four real bugs came out of the first round of testing on the actual target
-laptop; three debug agents fixed them (`772abbd`, `9481672`, `b01ef07`,
+Four real bugs came out of the first round of testing on the dev desktop
+(the work laptop comes later in the rollout); three debug agents fixed them (`772abbd`, `9481672`, `b01ef07`,
 `17c6430`). The shape of the bugs is worth keeping around as a lesson, not
 just the fixes.
 
@@ -585,7 +585,7 @@ all of this:
   own) so the shipped exe stays byte-identical in size; the `.pdb` is a
   separate artifact `build.cmd` copies into `dist/` and is never bundled
   into or required by the exe itself. To symbolize a dump brought back from
-  the laptop: `cdb -z run-*.dmp -y <pdb dir> -i <exe dir>` then `.ecxr`
+  another machine: `cdb -z run-*.dmp -y <pdb dir> -i <exe dir>` then `.ecxr`
   (jump to the exception context) and `k` (stack trace).
 - Tray gained an "Open logs folder" item (`ShellExecuteW` on `Log::dir()`).
 
