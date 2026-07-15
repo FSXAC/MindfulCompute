@@ -16,7 +16,7 @@ lasts 25 seconds.
       machine — this is the only first-run gate.)
 - [ ] The intention panel appears, centered, floating above everything, with the
       screen dimmed around it. The version line bottom-right reads
-      `v1.2.2-win (yyMMdd.HHmm)` and the stamp matches when you built it.
+      `v1.2.3-win (yyMMdd.HHmm)` and the stamp matches when you built it.
 - [ ] The exe has the green leaf icon in Explorer, and the taskbar/tray shows a
       leaf (not a generic window icon).
 

@@ -11,7 +11,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # stamp is captured HERE, at CONFIGURE time -- so re-running cmake (which
 # build.cmd does on every build) refreshes it; a plain `ninja` re-link does not.
 string(TIMESTAMP MINDFUL_BUILD_STAMP "%y%m%d.%H%M")
-set(MINDFUL_VERSION "1.2.2-win")
+set(MINDFUL_VERSION "1.2.3-win")
 
 # ---- Embedded resources (app icon + bowl wav) ----
 # Absolute paths are baked into a configured .rc so rc.exe resolves them from any
