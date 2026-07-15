@@ -97,10 +97,14 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     INITCOMMONCONTROLSEX icc{ sizeof(icc), ICC_STANDARD_CLASSES };
     InitCommonControlsEx(&icc);
 
-    int autoexit = 120;
+    // Watchdog arms ONLY when MINDFUL_SPIKE_AUTOEXIT is set (agent/test runs).
+    // Production must stay resident: a default auto-exit would kill any session
+    // longer than the timeout (user-approved decision, 2026-07-15).
+    int autoexit = 0;
     std::wstring ae = envStr(L"MINDFUL_SPIKE_AUTOEXIT");
     if (!ae.empty()) { int v = _wtoi(ae.c_str()); if (v >= 1 && v <= 3600) autoexit = v; }
-    Log::write(L"[main] watchdog autoexit = %d s", autoexit);
+    if (autoexit > 0) Log::write(L"[main] watchdog autoexit = %d s", autoexit);
+    else              Log::write(L"[main] watchdog disabled (no MINDFUL_SPIKE_AUTOEXIT)");
 
     GraphicsDevice gfx;
     if (!gfx.init()) { Log::write(L"[main] FATAL: graphics init failed"); return 2; }
@@ -252,7 +256,8 @@ int APIENTRY wWinMain(HINSTANCE hInst, HINSTANCE, LPWSTR, int) {
     }
     updateTray();
 
-    SetTimer(overlay.hwnd(), TIMER_WATCHDOG, (UINT)autoexit * 1000, nullptr);
+    if (autoexit > 0)
+        SetTimer(overlay.hwnd(), TIMER_WATCHDOG, (UINT)autoexit * 1000, nullptr);
     // Countdown tick is started on demand when a session begins (see
     // onPhaseObserved). Only arm it now if MINDFUL_AUTOSTART already began one.
     if (page.phase() == Phase::Running)
