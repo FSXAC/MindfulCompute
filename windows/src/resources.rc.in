@@ -1,0 +1,12 @@
+// Configured by CMake (configure_file, @ONLY). Absolute paths are substituted
+// so rc.exe resolves them regardless of the build directory. Re-running cmake
+// regenerates this file.
+#include "resource.h"
+
+// The exe/window/tray icon. Being the first (lowest-id) ICON resource, Windows
+// also uses it as the file's Explorer icon automatically.
+IDI_APPICON ICON "@APP_ICO_PATH@"
+
+// The bowl, embedded as a WAVE resource so the shipped exe is a single file.
+// PlaySound(MAKEINTRESOURCE(IDR_BOWL), hInst, SND_RESOURCE | SND_ASYNC).
+IDR_BOWL    WAVE "@BOWL_WAV_PATH@"
