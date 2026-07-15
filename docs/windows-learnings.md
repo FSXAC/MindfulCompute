@@ -549,6 +549,13 @@ or precompute and post DIP-space coordinates instead of raw client pixels.
 `WM_CHAR` and other non-positional messages are unaffected — this only bites
 message types carrying a screen/client coordinate pair.
 
+A second harness gotcha, from testing card dragging (`v1.2.3-win`): once the
+app calls `SetCapture` mid-drag, the **real physical cursor** feeds the drag —
+synthetic `WM_MOUSEMOVE` posts still arrive, but any actual mouse twitch also
+lands, so visual dumps can show the card following the parked hardware mouse
+instead of the injected coordinates. That's correct capture semantics, not a
+bug; park the physical cursor somewhere deliberate before injecting a drag.
+
 ### Logging and crash system (new, `9481672`)
 
 The field crash (typing in the reflection field, during this same round)

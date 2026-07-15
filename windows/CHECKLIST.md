@@ -19,6 +19,11 @@ lasts 25 seconds.
       `v1.2.3-win (yyMMdd.HHmm)` and the stamp matches when you built it.
 - [ ] The exe has the green leaf icon in Explorer, and the taskbar/tray shows a
       leaf (not a generic window icon).
+- [ ] The card can be dragged by any non-interactive part (not the text field,
+      slider, or button) on both the intention and reflection panels; the text
+      box stays glued to the card while dragging, the cursor becomes a
+      four-arrow move cursor, and the card can't be dragged fully off-screen.
+      A plain click (no movement) doesn't nudge the card.
 
 ## Sound
 - [ ] On **Begin**, the Tibetan bowl is clearly audible (it plays from inside the
