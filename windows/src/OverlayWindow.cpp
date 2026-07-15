@@ -54,17 +54,43 @@ bool OverlayWindow::create(HINSTANCE hInst, GraphicsDevice* gfx, PageController*
                            const RECT& workArea, UINT dpi) {
     gfx_ = gfx; page_ = page; work_ = workArea; dpi_ = dpi; scale_ = dpi / 96.f;
 
+    // Reduced-motion: honour the system "Animation effects" toggle (Settings >
+    // Accessibility > Visual effects), the Windows analogue of the Mac's
+    // accessibilityReduceMotion (TitleCardView.BreathGuide). When reduced, the
+    // breathing guide renders as a deliberate STATIC guide ("Take a slow breath")
+    // instead of animating -- matching the Swift app, NOT a bug. Heads-up for
+    // future readers: this OS toggle is OFF far more often on Windows (perf
+    // presets, RDP, VMs, tuned desktops) than the Mac a11y setting is on, so the
+    // static guide is a common, correct state -- hence the loud startup log below
+    // so a static guide is never again mistaken for a broken animation.
     BOOL anim = TRUE;
     SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, &anim, 0);
-    reduceMotion_ = (anim == FALSE);
-    // Dev override so the animated path can be exercised on a machine that has
-    // reduce-motion enabled system-wide (MINDFUL_FORCE_MOTION=1 forces motion,
+    bool systemReduce = (anim == FALSE);
+    reduceMotion_ = systemReduce;
+    // Dev override so either path can be exercised regardless of the system
+    // setting, in EVERY build config (MINDFUL_FORCE_MOTION=1 forces motion,
     // =0 forces reduced). Absent -> honour the system setting.
+    bool forced = false;
     if (GetEnvironmentVariableW(L"MINDFUL_FORCE_MOTION", nullptr, 0) > 0) {
         wchar_t v[8]{}; GetEnvironmentVariableW(L"MINDFUL_FORCE_MOTION", v, 8);
         reduceMotion_ = (v[0] == L'0');
+        forced = true;
     }
-    Log::write(L"[overlay] dpi=%u scale=%.2f reduceMotion=%d", dpi_, scale_, reduceMotion_ ? 1 : 0);
+    Log::write(L"[overlay] dpi=%u scale=%.2f", dpi_, scale_);
+    Log::write(L"[overlay] motion: SPI_GETCLIENTAREAANIMATION=%d systemReduce=%d override=%ls "
+               L"-> reduceMotion=%d (breathing guide %ls)",
+               anim ? 1 : 0, systemReduce ? 1 : 0,
+               forced ? L"MINDFUL_FORCE_MOTION" : L"none",
+               reduceMotion_ ? 1 : 0,
+               reduceMotion_ ? L"STATIC by design" : L"animated");
+    // Also surface it on the debugger channel (DebugView), so a "why won't it
+    // animate?" report can be answered without locating the spike log.
+    wchar_t dbg[192];
+    _snwprintf_s(dbg, _countof(dbg), _TRUNCATE,
+                 L"[MindfulCompute] reduceMotion=%d (systemAnim=%d forced=%d): breathing guide %ls\n",
+                 reduceMotion_ ? 1 : 0, anim ? 1 : 0, forced ? 1 : 0,
+                 reduceMotion_ ? L"STATIC by design" : L"animated");
+    OutputDebugStringW(dbg);
 
     // QA: periodic PNG dumps of what's actually drawn (headless sessions can't
     // screen-capture). MINDFUL_DUMP_DIR=<dir> enables it.
