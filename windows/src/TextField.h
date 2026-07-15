@@ -22,8 +22,12 @@ public:
     // font height in PHYSICAL pixels (caller scales by DPI), since the host is a
     // physical-pixel window.
     bool create(HWND owner, HINSTANCE hInst, int controlId,
-                const RECT& screenRect, int fontPx = 15);
+                const RECT& screenRect, int fontPx = 15, int cornerRadiusPx = 11);
     void setScreenRect(const RECT& screenRect);
+    // Corner radius of the host's rounded region, in PHYSICAL pixels. Kept in
+    // sync with the D2D field chrome's radius (kFieldRadius * DPI scale) so the
+    // opaque host and the border drawn around it share the same rounded corners.
+    void setCornerRadiusPx(int px) { radiusPx_ = (px < 0) ? 0 : px; }
     void showAndFocus();
     void hide();
     void setText(const std::wstring& s);
@@ -52,4 +56,5 @@ private:
     bool   focused_ = false;
     int    editPadX_ = 12;
     int    editPadY_ = 10;
+    int    radiusPx_ = 11;   // host rounded-corner radius (physical px, DPI-scaled)
 };

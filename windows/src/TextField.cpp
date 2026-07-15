@@ -8,9 +8,10 @@ const wchar_t* kHostClass = L"MindfulFieldHost";
 }
 
 bool TextField::create(HWND owner, HINSTANCE hInst, int controlId,
-                       const RECT& sr, int fontPx) {
+                       const RECT& sr, int fontPx, int cornerRadiusPx) {
     editPadX_ = fontPx * 4 / 5;   // horizontal inset scales with the font
     editPadY_ = fontPx * 3 / 5;   // vertical inset centres the single line
+    radiusPx_ = (cornerRadiusPx < 0) ? 0 : cornerRadiusPx;
     static bool registered = false;
     if (!registered) {
         WNDCLASSEXW wc{};
@@ -41,8 +42,9 @@ bool TextField::create(HWND owner, HINSTANCE hInst, int controlId,
         Log::write(L"[edit] field host CreateWindowEx failed err=%lu", GetLastError());
         return false;
     }
-    // Rounded corners to match the D2D field chrome.
-    SetWindowRgn(host_, CreateRoundRectRgn(0, 0, w + 1, h + 1, 12, 12), FALSE);
+    // Rounded corners to match the D2D field chrome. The corner ellipse is
+    // 2 * radius; radiusPx_ tracks kFieldRadius * DPI scale (set by the caller).
+    SetWindowRgn(host_, CreateRoundRectRgn(0, 0, w + 1, h + 1, 2 * radiusPx_, 2 * radiusPx_), FALSE);
 
     edit_ = CreateWindowExW(
         0, L"EDIT", L"",
@@ -75,7 +77,7 @@ void TextField::setScreenRect(const RECT& sr) {
     if (!host_) return;
     const int w = sr.right - sr.left, h = sr.bottom - sr.top;
     SetWindowPos(host_, HWND_TOPMOST, sr.left, sr.top, w, h, SWP_NOACTIVATE);
-    SetWindowRgn(host_, CreateRoundRectRgn(0, 0, w + 1, h + 1, 12, 12), TRUE);
+    SetWindowRgn(host_, CreateRoundRectRgn(0, 0, w + 1, h + 1, 2 * radiusPx_, 2 * radiusPx_), TRUE);
     if (edit_)
         SetWindowPos(edit_, nullptr, editPadX_, editPadY_,
                      w - 2 * editPadX_, h - 2 * editPadY_,

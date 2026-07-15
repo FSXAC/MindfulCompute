@@ -64,6 +64,11 @@ private:
     void drawTitleCard(ID2D1DeviceContext*, ID2D1SolidColorBrush*);
     void drawBreathGuide(ID2D1DeviceContext*, ID2D1SolidColorBrush*, float cx, float cy, float opacity);
     void drawCardChrome(ID2D1DeviceContext*, ID2D1SolidColorBrush*, D2D1_COLOR_F accent);
+    // Field fill + (when focused) an accent focus ring drawn just outside the
+    // opaque EDIT host. Shared by the start and break screens so both fields are
+    // styled identically.
+    void drawFieldChrome(ID2D1DeviceContext*, ID2D1SolidColorBrush*,
+                         const D2D1_RECT_F& rect, bool focused, D2D1_COLOR_F accent);
 
     void  startFrames();
     void  stopFramesIfIdle();

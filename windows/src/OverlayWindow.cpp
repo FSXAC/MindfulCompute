@@ -128,14 +128,15 @@ bool OverlayWindow::create(HINSTANCE hInst, GraphicsDevice* gfx, PageController*
 
     computeLayout();
     int fontPx = (int)std::lround(Theme::kFntField * scale_);
+    int fieldRadiusPx = (int)std::lround(Theme::kFieldRadius * scale_);
 
-    intentionField_.create(hwnd_, hInst, kIntentionId, toScreen(fieldRect_), fontPx);
+    intentionField_.create(hwnd_, hInst, kIntentionId, toScreen(fieldRect_), fontPx, fieldRadiusPx);
     intentionField_.onSubmit = [this]() { if (page_->canBegin()) page_->begin(); };
     intentionField_.onEscape = [this]() { if (onQuitRequested) onQuitRequested(); };
     intentionField_.onChange = [this]() { page_->setIntentionRaw(intentionField_.text()); invalidate(); };
     intentionField_.onFocusChanged = [this](bool) { invalidate(); };
 
-    reflectionField_.create(hwnd_, hInst, kReflectionId, toScreen(fieldRect_), fontPx);
+    reflectionField_.create(hwnd_, hInst, kReflectionId, toScreen(fieldRect_), fontPx, fieldRadiusPx);
     reflectionField_.onSubmit = [this]() { page_->continueFromBreak(); };
     reflectionField_.onEscape = [this]() { if (onQuitRequested) onQuitRequested(); };
     reflectionField_.onChange = [this]() { page_->setReflectionRaw(reflectionField_.text()); };
@@ -158,6 +159,7 @@ RECT OverlayWindow::toScreen(const D2D1_RECT_F& dip) const {
     };
 }
 void OverlayWindow::positionField(TextField& f, const D2D1_RECT_F& dip) {
+    f.setCornerRadiusPx((int)std::lround(Theme::kFieldRadius * scale_));
     f.setScreenRect(toScreen(dip));
 }
 
@@ -420,6 +422,26 @@ void OverlayWindow::drawCardChrome(ID2D1DeviceContext* dc, ID2D1SolidColorBrush*
     (void)saved;
 }
 
+void OverlayWindow::drawFieldChrome(ID2D1DeviceContext* dc, ID2D1SolidColorBrush* b,
+                                    const D2D1_RECT_F& rect, bool focused, D2D1_COLOR_F accent) {
+    // The opaque EDIT host floats exactly over `rect` with the same rounded
+    // corners (kFieldRadius), so it is the field's visible surface. Draw the
+    // translucent fill (matches macOS .quinary; shows through the host's
+    // antialiased corners) and, when focused, an accent ring one DIP OUTSIDE the
+    // rect so the antialiased stroke clears the opaque host and wraps its rounded
+    // corners fully -- the Windows stand-in for StartView's focused strokeBorder.
+    // Unfocused draws no border, matching both macOS fields (fill only).
+    D2D1_ROUNDED_RECT fill{ rect, Theme::kFieldRadius, Theme::kFieldRadius };
+    b->SetColor(Theme::fieldFill());
+    dc->FillRoundedRectangle(fill, b);
+    if (focused) {
+        D2D1_RECT_F r = D2D1::RectF(rect.left - 1, rect.top - 1, rect.right + 1, rect.bottom + 1);
+        D2D1_ROUNDED_RECT ring{ r, Theme::kFieldRadius + 1, Theme::kFieldRadius + 1 };
+        b->SetColor(accent);
+        dc->DrawRoundedRectangle(ring, b, Theme::kFieldRingWidth);
+    }
+}
+
 void OverlayWindow::drawStart(ID2D1DeviceContext* dc, ID2D1SolidColorBrush* b) {
     D2D1_MATRIX_3X2_F saved; dc->GetTransform(&saved);
     drawCardChrome(dc, b, Theme::sage());
@@ -447,19 +469,7 @@ void OverlayWindow::drawStart(ID2D1DeviceContext* dc, ID2D1SolidColorBrush* b) {
     y += sansH(Theme::kFntTitle) + 24.f;
 
     // field chrome / focus ring (the EDIT host floats above; ring drawn outside it)
-    D2D1_ROUNDED_RECT fr{ fieldRect_, Theme::kFieldRadius, Theme::kFieldRadius };
-    b->SetColor(Theme::fieldFill());
-    dc->FillRoundedRectangle(fr, b);
-    if (intentionField_.focused()) {
-        D2D1_RECT_F ring = D2D1::RectF(fieldRect_.left - 1, fieldRect_.top - 1,
-                                       fieldRect_.right + 1, fieldRect_.bottom + 1);
-        D2D1_ROUNDED_RECT rr{ ring, Theme::kFieldRadius + 1, Theme::kFieldRadius + 1 };
-        b->SetColor(Theme::sage(0.6f));
-        dc->DrawRoundedRectangle(rr, b, 1.5f);
-    } else {
-        b->SetColor(Theme::fieldBorder());
-        dc->DrawRoundedRectangle(fr, b, 1.f);
-    }
+    drawFieldChrome(dc, b, fieldRect_, intentionField_.focused(), Theme::sage(0.6f));
     y = fieldRect_.bottom + 24.f;
 
     // "For N minutes"
@@ -602,12 +612,9 @@ void OverlayWindow::drawBreak(ID2D1DeviceContext* dc, ID2D1SolidColorBrush* b) {
     tl_.draw(dc, L"Before you go — how did it go?", sPrompt,
              D2D1::RectF(L, y, R, y + sansH(Theme::kFntCallout)), b);
 
-    // reflection field chrome (host floats above)
-    D2D1_ROUNDED_RECT rf{ reflectRect_, Theme::kFieldRadius, Theme::kFieldRadius };
-    b->SetColor(Theme::fieldFill());
-    dc->FillRoundedRectangle(rf, b);
-    b->SetColor(Theme::fieldBorder());
-    dc->DrawRoundedRectangle(rf, b, 1.f);
+    // reflection field chrome (host floats above; same treatment as the start
+    // field, themed to the break panel's ember accent)
+    drawFieldChrome(dc, b, reflectRect_, reflectionField_.focused(), Theme::ember(0.6f));
 
     // Continue button (ember)
     D2D1_ROUNDED_RECT btn{ continueRect_, Theme::kButtonRadius, Theme::kButtonRadius };
@@ -816,6 +823,12 @@ LRESULT OverlayWindow::handle(UINT msg, WPARAM w, LPARAM l) {
             return xd >= r.left && xd <= r.right && yd >= r.top && yd <= r.bottom;
         };
         if (screen_ == Screen::Idle) {
+            // The field host is a separate top-level window; once the overlay
+            // takes activation (any click on it), the host drops behind it and
+            // clicks land here instead of on the EDIT. Forward a click inside the
+            // field rect back to the field so it re-raises and refocuses -- the
+            // caret returns just like clicking the field on macOS.
+            if (inR(fieldRect_)) { intentionField_.showAndFocus(); return 0; }
             if (inR(beginRect_)) { if (page_->canBegin()) page_->begin(); return 0; }
             D2D1_RECT_F sh = D2D1::RectF(sliderRect_.left - 8, sliderRect_.top - 4,
                                          sliderRect_.right + 8, sliderRect_.bottom + 4);
@@ -823,6 +836,7 @@ LRESULT OverlayWindow::handle(UINT msg, WPARAM w, LPARAM l) {
                            page_->setMinutes(sliderValueFromX(xd)); invalidate(); return 0; }
             if (!inR(panelRect_)) pulse();
         } else if (screen_ == Screen::Break) {
+            if (inR(reflectRect_)) { reflectionField_.showAndFocus(); return 0; }
             if (inR(continueRect_)) { page_->continueFromBreak(); return 0; }
             if (!inR(panelRect_)) pulse();
         } else if (screen_ == Screen::TitleShow) {

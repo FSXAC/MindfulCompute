@@ -20,6 +20,7 @@ constexpr float kPanelWidth   = 400.f;   // .frame(width: 400)
 constexpr float kPanelRadius  = 26.f;    // RoundedRectangle(cornerRadius: 26)
 constexpr float kPanelPad     = 28.f;    // .padding(28)
 constexpr float kFieldRadius  = 11.f;    // intention/reflection field corners
+constexpr float kFieldRingWidth = 1.f;   // focus ring stroke (StartView strokeBorder lineWidth 1)
 constexpr float kFieldHeight  = 44.f;    // font 15 + vertical padding 11*2
 constexpr float kButtonHeight = 38.f;    // .controlSize(.large)
 constexpr float kButtonRadius = 8.f;
