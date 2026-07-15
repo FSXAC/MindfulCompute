@@ -79,6 +79,14 @@ private:
     int   sliderValueFromX(float xDip) const;
     void  setBadgeFromPhase();
 
+    // Card dragging: clamp dragOffset_ (DIPs) so the panel of size panelW x
+    // panelH, whose un-dragged top-left is (px,py), keeps a generous margin
+    // on-screen. Called from computeLayout where panelH is known.
+    void  clampDragOffset(float px, float py, float panelW, float panelH);
+    // Reposition the field host that belongs to the current screen (so it
+    // tracks the card while dragging). No-op for screens without a field.
+    void  repositionActiveField();
+
     HWND              hwnd_ = nullptr;
     GraphicsDevice*   gfx_  = nullptr;
     PageController*   page_ = nullptr;
@@ -100,6 +108,18 @@ private:
     ULONGLONG titleStart_ = 0;
     ULONGLONG breakStart_ = 0;
     bool    draggingSlider_ = false;
+
+    // Card dragging (start & break panels). The card is not a window; dragging
+    // just offsets where it's drawn (dragOffset_, in DIPs) and re-lays out.
+    // Reset to 0 on each panel entrance so the card re-centres on next show.
+    float   dragOffsetX_ = 0.f;
+    float   dragOffsetY_ = 0.f;
+    bool    draggingCard_ = false;   // between LBUTTONDOWN in card and release
+    bool    dragMoved_    = false;   // passed the ~4px threshold this drag
+    int     dragStartMouseX_ = 0;    // physical px at button-down
+    int     dragStartMouseY_ = 0;
+    float   dragStartOffX_ = 0.f;    // dragOffset_ captured at button-down (DIPs)
+    float   dragStartOffY_ = 0.f;
 
     // QA frame dumps (MINDFUL_DUMP_DIR): periodic PNG of exactly what's drawn,
     // since live screen capture isn't possible in a headless automation session.

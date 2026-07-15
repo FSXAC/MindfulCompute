@@ -169,7 +169,7 @@ void OverlayWindow::computeLayout() {
     const float H = comp_.dipHeight();
     const float PAD = Theme::kPanelPad;
     const float CW = Theme::kPanelWidth - 2 * PAD;
-    const float px = (W - Theme::kPanelWidth) * 0.5f;
+    float px = (W - Theme::kPanelWidth) * 0.5f;   // base (un-dragged) card left
 
     auto sansH = [&](float sz) { return sz * 1.34f; };  // single-line height est.
 
@@ -209,6 +209,8 @@ void OverlayWindow::computeLayout() {
         float panelH = y + PAD;
 
         float py = std::max(8.f, (H - panelH) * 0.5f - H * 0.04f);
+        clampDragOffset(px, py, Theme::kPanelWidth, panelH);
+        px += dragOffsetX_; py += dragOffsetY_;
         panelRect_ = D2D1::RectF(px, py, px + Theme::kPanelWidth, py + panelH);
         reflectRect_ = D2D1::RectF(px + PAD, py + reflY, px + PAD + CW, py + reflY + Theme::kFieldHeight);
         continueRect_ = D2D1::RectF(px + PAD, py + contY, px + PAD + CW, py + contY + Theme::kButtonHeight);
@@ -236,11 +238,31 @@ void OverlayWindow::computeLayout() {
         float panelH = y + PAD - 12.f;
 
         float py = std::max(8.f, (H - panelH) * 0.5f - H * 0.05f);
+        clampDragOffset(px, py, Theme::kPanelWidth, panelH);
+        px += dragOffsetX_; py += dragOffsetY_;
         panelRect_ = D2D1::RectF(px, py, px + Theme::kPanelWidth, py + panelH);
         fieldRect_ = D2D1::RectF(px + PAD, py + fieldY, px + PAD + CW, py + fieldY + Theme::kFieldHeight);
         sliderRect_ = D2D1::RectF(px + PAD, py + sliderY, px + PAD + CW, py + sliderY + 22.f);
         beginRect_ = D2D1::RectF(px + PAD, py + beginY, px + PAD + CW, py + beginY + Theme::kButtonHeight);
     }
+}
+
+// Keep at least kDragMargin DIPs of the card on-screen on every edge, so it can
+// never be dragged fully out of reach. Clamps dragOffset_ in place; if the card
+// is larger than the work area minus margins on an axis, that axis stays 0.
+void OverlayWindow::clampDragOffset(float px, float py, float panelW, float panelH) {
+    constexpr float kDragMargin = 72.f;   // generous visible sliver
+    const float W = comp_.dipWidth();
+    const float H = comp_.dipHeight();
+    float loX = kDragMargin - panelW - px, hiX = W - kDragMargin - px;
+    dragOffsetX_ = (loX > hiX) ? 0.f : std::clamp(dragOffsetX_, loX, hiX);
+    float loY = kDragMargin - panelH - py, hiY = H - kDragMargin - py;
+    dragOffsetY_ = (loY > hiY) ? 0.f : std::clamp(dragOffsetY_, loY, hiY);
+}
+
+void OverlayWindow::repositionActiveField() {
+    if (screen_ == Screen::Idle)       positionField(intentionField_, fieldRect_);
+    else if (screen_ == Screen::Break) positionField(reflectionField_, reflectRect_);
 }
 
 // ---------------------------------------------------------- state changes ---
@@ -258,6 +280,8 @@ void OverlayWindow::enterIdle(bool firstShow) {
     ULONGLONG now = GetTickCount64();
     screen_ = Screen::Idle;
     reflectionField_.hide();
+    dragOffsetX_ = dragOffsetY_ = 0.f;   // fresh layout re-centres the card
+    draggingCard_ = false;
     KillTimer(hwnd_, TIMER_LOGIC);   // idle: no session running
 
     ShowWindow(hwnd_, SW_SHOWNA);
@@ -303,6 +327,8 @@ void OverlayWindow::enterHidden() {
 void OverlayWindow::enterBreakGather() {
     ULONGLONG now = GetTickCount64();
     screen_ = Screen::BreakGather;
+    dragOffsetX_ = dragOffsetY_ = 0.f;   // fresh layout re-centres the break card
+    draggingCard_ = false;
     KillTimer(hwnd_, TIMER_BREAKSHOW);
     ShowWindow(hwnd_, SW_SHOWNA);
     SetWindowPos(hwnd_, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -822,6 +848,15 @@ LRESULT OverlayWindow::handle(UINT msg, WPARAM w, LPARAM l) {
         auto inR = [&](const D2D1_RECT_F& r) {
             return xd >= r.left && xd <= r.right && yd >= r.top && yd <= r.bottom;
         };
+        // Begin dragging the card: any press inside the panel that didn't land on
+        // an interactive element (field/button/slider). A ~4px threshold in
+        // WM_MOUSEMOVE keeps a sloppy click from nudging the card.
+        auto beginCardDrag = [&]() {
+            draggingCard_ = true; dragMoved_ = false;
+            dragStartMouseX_ = GET_X_LPARAM(l); dragStartMouseY_ = GET_Y_LPARAM(l);
+            dragStartOffX_ = dragOffsetX_; dragStartOffY_ = dragOffsetY_;
+            SetCapture(hwnd_);
+        };
         if (screen_ == Screen::Idle) {
             // The field host is a separate top-level window; once the overlay
             // takes activation (any click on it), the host drops behind it and
@@ -834,11 +869,13 @@ LRESULT OverlayWindow::handle(UINT msg, WPARAM w, LPARAM l) {
                                          sliderRect_.right + 8, sliderRect_.bottom + 4);
             if (inR(sh)) { draggingSlider_ = true; SetCapture(hwnd_);
                            page_->setMinutes(sliderValueFromX(xd)); invalidate(); return 0; }
-            if (!inR(panelRect_)) pulse();
+            if (inR(panelRect_)) beginCardDrag();
+            else pulse();
         } else if (screen_ == Screen::Break) {
             if (inR(reflectRect_)) { reflectionField_.showAndFocus(); return 0; }
             if (inR(continueRect_)) { page_->continueFromBreak(); return 0; }
-            if (!inR(panelRect_)) pulse();
+            if (inR(panelRect_)) beginCardDrag();
+            else pulse();
         } else if (screen_ == Screen::TitleShow) {
             // Tap to skip: same choreography as a natural end -- fade the card
             // (stage 1), then the tick releases the dim (stage 2). Matches Swift,
@@ -855,11 +892,40 @@ LRESULT OverlayWindow::handle(UINT msg, WPARAM w, LPARAM l) {
         if (draggingSlider_) {
             float xd = GET_X_LPARAM(l) / scale_;
             page_->setMinutes(sliderValueFromX(xd)); invalidate();
+            return 0;
+        }
+        if (draggingCard_) {
+            int dx = GET_X_LPARAM(l) - dragStartMouseX_;
+            int dy = GET_Y_LPARAM(l) - dragStartMouseY_;
+            if (!dragMoved_) {
+                if (dx * dx + dy * dy < 16) return 0;   // ~4px threshold (physical px)
+                dragMoved_ = true;
+                SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+            }
+            // Mouse arrives in physical px; card geometry is in DIPs.
+            dragOffsetX_ = dragStartOffX_ + dx / scale_;
+            dragOffsetY_ = dragStartOffY_ + dy / scale_;
+            computeLayout();          // re-lays out & clamps the offset in place
+            repositionActiveField();  // the EDIT host tracks the card, same frame
+            invalidate();
+            return 0;
         }
         return 0;
     case WM_LBUTTONUP:
         if (draggingSlider_) { draggingSlider_ = false; ReleaseCapture(); }
+        else if (draggingCard_) { draggingCard_ = false; dragMoved_ = false; ReleaseCapture(); }
         return 0;
+
+    case WM_CAPTURECHANGED:   // capture stolen (e.g. Alt+Tab): end any drag cleanly
+        draggingSlider_ = false; draggingCard_ = false; dragMoved_ = false;
+        return 0;
+
+    case WM_SETCURSOR:
+        if (draggingCard_ && dragMoved_ && LOWORD(l) == HTCLIENT) {
+            SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+            return TRUE;
+        }
+        break;   // otherwise default arrow
 
     case WM_KEYDOWN:
         if (w == VK_ESCAPE) { if (onQuitRequested) onQuitRequested(); }
