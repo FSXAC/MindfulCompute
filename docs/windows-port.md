@@ -5,6 +5,9 @@
 > when in doubt about exact copy, colours, timings, or behaviour, **read the
 > Swift source** (paths are cited throughout). Match behaviour, not code.
 
+> Field learnings from actually building this — pitfalls, workarounds, and
+> what changed from the plan below — live in `windows-learnings.md`.
+
 ## Goal
 
 A Windows build of MindfulCompute with **UX comparable to the macOS app**: a
@@ -109,9 +112,10 @@ one "smart" window carrying the UI; every other monitor gets a plain dimmer.
     `WM_NCCREATE` *before* dispatching to the handler — if the handler calls
     back into `DefWindowProc(nullptr, WM_NCCREATE, ...)` with the hwnd still
     unset, window creation fails.
-  - The spike renders at 96 DPI (1 D2D unit = 1 px). Phase 1 must scale
-    geometry and fonts by each monitor's effective DPI and reposition on
-    `WM_DPICHANGED` — currently that message only rebuilds the dimmers.
+  - The spike rendered at 96 DPI (1 D2D unit = 1 px); Phase 1 added the real
+    handling — geometry and fonts scale by each monitor's effective DPI, and
+    `WM_DPICHANGED` now repositions/rescales the overlay, composition target,
+    layout, and field host before rebuilding the dimmers.
 - **All animation/color/spacing/timing constants live in ONE header** (e.g.
   `Theme.h`) so tuning passes are cheap. Animations are immediate-mode: a
   frame timer (target 60 fps only while animating, 0 fps when idle — this is
