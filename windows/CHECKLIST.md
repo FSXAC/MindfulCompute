@@ -21,9 +21,10 @@ lasts 25 seconds.
       leaf (not a generic window icon).
 - [ ] The card can be dragged by any non-interactive part (not the text field,
       slider, or button) on both the intention and reflection panels; the text
-      box stays glued to the card while dragging, the cursor becomes a
-      four-arrow move cursor, and the card can't be dragged fully off-screen.
-      A plain click (no movement) doesn't nudge the card.
+      box follows the card while dragging (it may trail by a few frames during
+      fast drags — known cosmetic limit, see windows-learnings.md), the cursor
+      becomes a four-arrow move cursor, and the card can't be dragged fully
+      off-screen. A plain click (no movement) doesn't nudge the card.
 
 ## Sound
 - [ ] On **Begin**, the Tibetan bowl is clearly audible (it plays from inside the

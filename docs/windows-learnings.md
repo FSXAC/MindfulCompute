@@ -556,6 +556,14 @@ lands, so visual dumps can show the card following the parked hardware mouse
 instead of the injected coordinates. That's correct capture semantics, not a
 bug; park the physical cursor somewhere deliberate before injecting a drag.
 
+Related, user-visible: while dragging, the EDIT field host visibly trails the
+card by a few frames on fast drags. The card is D2D pixels presented into the
+DComp swap chain (`Present(1,0)`, default frame-latency queue) while the host
+is a plain HWND moved with `SetWindowPos` — DWM applies the two on independent
+schedules with no atomicity, so shear between them is structural. The clean fix
+would be hiding the host during the drag and letting D2D draw the text; judged
+not worth the complexity for a barely-noticeable effect (Muchen, 2026-07-16).
+
 ### Logging and crash system (new, `9481672`)
 
 The field crash (typing in the reflection field, during this same round)
