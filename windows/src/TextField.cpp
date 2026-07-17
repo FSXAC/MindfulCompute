@@ -86,15 +86,80 @@ void TextField::setScreenRect(const RECT& sr) {
 
 void TextField::showAndFocus() {
     if (!host_) return;
+
+    // Bring the host up and re-assert its z-order in the TOPMOST band. The host
+    // is an UNOWNED top-level window that shares the overlay's TOPMOST band, and
+    // overlay activation can bury it -- floating it here keeps it above the panel.
     ShowWindow(host_, SW_SHOWNA);
     SetWindowPos(host_, HWND_TOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    SetForegroundWindow(host_);
-    SetActiveWindow(host_);
+
+    // Acquire the foreground reliably. The app is otherwise never activated
+    // (everything is shown NA / NOACTIVATE), so a bare SetForegroundWindow is a
+    // silent no-op whenever another PROCESS owns the foreground -- exactly the
+    // break-fires-mid-work case. Escalate only as far as needed.
+    //   Path 0: foreground is already ours -> just SetFocus.
+    //   Path 1: AttachThreadInput handshake with the foreground thread.
+    //   Path 2: synthetic-Alt trick (fallback) to satisfy the foreground lock.
+    const HWND  fg    = GetForegroundWindow();
+    const DWORD myTid = GetCurrentThreadId();
+
+    // "Ours" = any top-level window on this thread (host, overlay, edit's root).
+    bool fgIsOurs = false;
+    if (fg) {
+        DWORD fgPid = 0;
+        DWORD fgTid = GetWindowThreadProcessId(fg, &fgPid);
+        fgIsOurs = (fgPid == GetCurrentProcessId());
+        (void)fgTid;
+    }
+
+    const wchar_t* path = L"already-foreground";
+    if (!fg || fgIsOurs) {
+        // Path 0: we already own the foreground (e.g. first launch). Nothing to
+        // steal -- just take keyboard focus.
+        SetForegroundWindow(host_);
+        SetActiveWindow(host_);
+    } else {
+        // Path 1: attach our input queue to the current foreground thread so
+        // Windows lets us call SetForegroundWindow across the process boundary.
+        DWORD fgTid = GetWindowThreadProcessId(fg, nullptr);
+        BOOL attached = (fgTid && fgTid != myTid)
+                            ? AttachThreadInput(myTid, fgTid, TRUE)
+                            : FALSE;
+        SetForegroundWindow(host_);
+        BringWindowToTop(host_);
+        SetActiveWindow(host_);
+        if (attached) AttachThreadInput(myTid, fgTid, FALSE);  // always detach
+        path = L"attach-thread-input";
+
+        // Path 2 (fallback): if the handshake did not win the foreground, nudge
+        // the foreground lock with a synthetic Alt keypress around the call. This
+        // makes the OS treat us as responding to user input. No hooks, no
+        // BlockInput -- just SendInput of VK_MENU down+up.
+        if (GetForegroundWindow() != host_) {
+            INPUT alt[2] = {};
+            alt[0].type = INPUT_KEYBOARD;
+            alt[0].ki.wVk = VK_MENU;
+            alt[1].type = INPUT_KEYBOARD;
+            alt[1].ki.wVk = VK_MENU;
+            alt[1].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(2, alt, sizeof(INPUT));
+            SetForegroundWindow(host_);
+            BringWindowToTop(host_);
+            SetActiveWindow(host_);
+            path = L"synthetic-alt";
+        }
+    }
+
     SetFocus(edit_);
     SendMessageW(edit_, EM_SETSEL, static_cast<WPARAM>(-1), -1);  // deselect, caret at end
-    Log::write(L"[edit] field shown; foreground=0x%p focus=0x%p",
-               (void*)GetForegroundWindow(), (void*)GetFocus());
+
+    const HWND nowFg = GetForegroundWindow();
+    const bool won   = (nowFg == host_);
+    Log::write(L"[edit] field shown; foreground=0x%p focus=0x%p host=0x%p "
+               L"path=%ls result=%ls",
+               (void*)nowFg, (void*)GetFocus(), (void*)host_, path,
+               won ? L"foreground-acquired" : L"FOREGROUND-NOT-ACQUIRED");
 }
 
 void TextField::hide() {
